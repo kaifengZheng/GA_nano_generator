@@ -5,13 +5,15 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from ase import Atoms
 from ase.visualize import view
-from random import sample, seed
+from random import sample,seed
 from shape_proj_util.geo_tools.geometry import *
 from ase.io.xyz import write_xyz
 from scipy.spatial.distance import cdist
 import random
 from tqdm.auto import tqdm
-from scipy.spatial import ConvexHull, QhullError
+from scipy.spatial import ConvexHull,QhullError
+from scipy.spatial import cKDTree
+
 
 
 def fccbasis(a):
