@@ -592,7 +592,9 @@ def genetic_algorithm(
         best_particle.append(Atoms(positions=particle, symbols=["Pt"] * len(particle)))
         fitness_record.append(ave_fitness)  # dong
         # [4]. print output
-        print(f"Generation{generation}: Finess={ave_fitness} Predict={best_predict}")
+        print(
+            f"Generation{generation}: Finess={np.quantile(fitness_values,0.85)} Predict={best_predict}"
+        )
         # [5]. update populations using crowding algorithm to prevent duplicates
         for child in new_populations:
             most_similar_individual = find_most_similar(populations, child)
@@ -657,7 +659,7 @@ def genetic_algorithm(
 if __name__ == "__main__":
     ini_configurations = {
         "max_num_atoms": 200,
-        "generations": 100,
+        "generations": 10,
         "population_size": 100,
         "lc": 3.77,
         "mutation_rate": 0.4,
@@ -687,6 +689,5 @@ if __name__ == "__main__":
         particles_descriptors.append(descriptor_table(last_atom_list[i]))
     pdes = pd.DataFrame(particles_descriptors)
     pdes.hist(bins=100)
-    plt.figure()
     plt.tight_layout()
     plt.savefig("dis.png")
