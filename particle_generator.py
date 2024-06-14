@@ -291,7 +291,7 @@ def atom_trancate_center(particle, theta, phi):
     # print(len(particle),len(trancate_particle),len(np.where(np.array(genome_recon)==1)[0]))
     return trancate_particle
 
-
+###### need to be modified######
 def atom_trancate_arbi(particle, theta, phi):
     def normal_vector(center, theta, phi):
         return np.array(
@@ -346,7 +346,6 @@ def crossover(lc, parent1, parent2, cross_over_rate=0.6):
             if index[0] not in duplicates:
                 index_get.append(index[0])
         return np.array([particle[i] for i in index_get])
-
     if random.random() < cross_over_rate:
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
@@ -372,7 +371,7 @@ def mutation(particle, lc, lattice_big, max_num_atoms, mutation_rate=0.3):
     mr = random.uniform(0, 1)
     num_atoms = len(particle)
 
-    if mr <= mutation_rate / 3:
+    if mr <= mutation_rate / 2:
         renum = 0
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
@@ -384,7 +383,7 @@ def mutation(particle, lc, lattice_big, max_num_atoms, mutation_rate=0.3):
             #     print("no good 1")
             particle_update = atom_trancate_center(particle, theta, phi)
             renum += 1
-    elif mr > mutation_rate / 3 and mr <= mutation_rate * 2 / 3:
+    elif mr > mutation_rate / 2:# and mr <= mutation_rate * 2 / 3:
         particle_update = particle
         renum = 0
         theta = random.uniform(0, np.pi)
@@ -395,15 +394,15 @@ def mutation(particle, lc, lattice_big, max_num_atoms, mutation_rate=0.3):
             phi = random.uniform(0, 2 * np.pi)
             particle_update = atom_trancate_arbi(particle, theta, phi)
             renum += 1
-    elif mr > mutation_rate * 2 / 3 and mr <= mutation_rate:
-        # 2. initialization of populations
-        particle_update = ini_population(
-            lc=lc,
-            population_size=1,
-            lattice_big=lattice_big,
-            max_num_atoms=max_num_atoms,
-            num_atoms=None,
-        )[0]
+    # elif mr > mutation_rate * 2 / 3 and mr <= mutation_rate:
+    #     # 2. initialization of populations
+    #     particle_update = ini_population(
+    #         lc=lc,
+    #         population_size=1,
+    #         lattice_big=lattice_big,
+    #         max_num_atoms=max_num_atoms,
+    #         num_atoms=None,
+    #     )[0]
 
     else:
         particle_update = particle
