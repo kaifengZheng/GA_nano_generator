@@ -8,12 +8,12 @@ from ase.visualize import view
 from random import sample, seed
 from shape_proj_util.geo_tools.geometry import *
 from ase.io.xyz import write_xyz
+from ase.io import write
 from scipy.spatial.distance import cdist
 import random
 from tqdm.auto import tqdm
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial import cKDTree
-from ase.io import write
 import os
 
 
@@ -63,7 +63,7 @@ def extendfcc(lattice, a, x, y, z):
     return np.array(lattice_extend)
 
 
-def empty_lattice(lc, n1, n2, n3):
+def empty_lattice(lc, n1, n2, n3, lattice_big):
     """
     Generate a fcc lattice by given lattice constant and superlattice parameters: n1,n2,n3.
     The constructed lattice is centered at (0,0,0), and the coordinates are reordered by the
@@ -79,11 +79,21 @@ def empty_lattice(lc, n1, n2, n3):
     # lattice=extendfcc(fccbasis(lc),lc,n1,n2,n3)
     lattice = extendfcc(fccbasis(lc), lc, n1, n2, n3)
     mid_position = np.mean(lattice, axis=0)
+    lattice = np.round(lattice - mid_position, 6)
+    x_max, y_max, z_max = np.max(lattice, axis=0)
+    x_min, y_min, z_min = np.min(lattice, axis=0)
     # lattice=np.round(lattice-mid_position,6)
-    closest_index = np.where(
-        np.all(np.isclose(mid_position, lattice, rtol=lc / (2 * np.sqrt(2))), axis=1)
-    )[0][0]
-    lattice = lattice - lattice[closest_index]
+    # lattice=order_pos(lattice)
+    lattice = lattice[
+        np.where(
+            (lattice[:, 0] >= x_min)
+            & (lattice[:, 0] <= x_max)
+            & (lattice[:, 1] >= y_min)
+            & (lattice[:, 1] <= y_max)
+            & (lattice[:, 2] >= z_min)
+            & (lattice[:, 2] <= z_max)
+        )
+    ]
     return order_pos(lattice)
 
 
@@ -138,27 +148,23 @@ def particles_encode_gen(lc, lattice_big, num_atoms=None, max_num_atoms=None):
     # times=random.randint(1,3)
     # the extreme case is that the particle has only one layer of unit cells, which has the dimension: np.sqrt(n_max**3)*np.sqrt(n_max**3)*1
     n1 = random.randint(1, np.floor(np.sqrt(n_max**3)))
-    n2 = n1
-    n3 = random.randint(1, n1)
-    lattice = empty_lattice(lc, n1, n2, n3)
+    n2 = random.randint(1, np.floor(np.sqrt(n_max**3)))
+    n3 = random.randint(1, np.floor(np.sqrt(n_max**3)))
+    lattice = empty_lattice(lc, n1, n2, n3, lattice_big)
     num_points = len(lattice)
     # this is too strong
     while num_points < num_atoms * 2 or n1 * n2 * n3 > n_max**3:
         n1 = random.randint(1, np.floor(np.sqrt(n_max**3)))
-        n2 = n1
-        n3 = random.randint(1, n1)
-        lattice = empty_lattice(lc, n1, n2, n3)
+        n2 = random.randint(1, np.floor(np.sqrt(n_max**3)))
+        n3 = random.randint(1, np.floor(np.sqrt(n_max**3)))
+        lattice = empty_lattice(lc, n1, n2, n3, lattice_big)
         num_points = len(lattice)
-        # print((num_points,n1,n2,n3,num_atoms))
+    lattice = lattice[:num_atoms]
+    # print((num_points,n1,n2,n3,num_atoms))
     # print(f"length={np.mean(lattice,axis=0)}")
     # transfer points to the big lattice
-    indices = []
-    # genome=np.zeros(len(lattice_big))
-    for i in range(num_atoms):
-        indices.extend(
-            np.where(np.all(np.isclose(lattice_big, lattice[i], rtol=1e-3), axis=1))[0]
-        )
-    return lattice_big[indices]
+
+    return lattice
 
 
 def ini_population(
@@ -173,6 +179,7 @@ def ini_population(
             num_atoms=num_atoms,
             max_num_atoms=max_num_atoms,
         )
+        # print(particle)
         generations.append(particle)
         n += 1
     return generations
@@ -187,10 +194,14 @@ def fitness(particle, descriptors: dict):
     # print(pred_dis)
     # MSE
     # np.sum((true_dis-pred_dis)**2)
+    x = np.sort(np.abs(pred_dis / true_dis - 1))
     if cluster_descriptors["flattening_moment"] == 0:
         sim = 100
     else:
-        sim = np.max(np.abs(pred_dis / true_dis - 1))
+        sim = np.mean(np.abs(1 - pred_dis / true_dis))
+    if x[-1] > 200:
+        x = x[x < 100]
+        sim = np.mean(x)
     return sim, pred_dis
 
 
@@ -377,19 +388,19 @@ def mutation(particle, lc, lattice_big, max_num_atoms, mutation_rate=0.3):
     mr = random.uniform(0, 1)
     num_atoms = len(particle)
 
-    if mr <= mutation_rate:  # / 2:
-        # renum = 0
-        # theta = random.uniform(0, np.pi)
-        # phi = random.uniform(0, 2 * np.pi)
-        # particle_update = atom_trancate_center(particle, theta, phi)
-        # while len(particle_update) < 5 and renum < 5:
-        #     theta = random.uniform(0, np.pi)
-        #     phi = random.uniform(0, 2 * np.pi)
-        #     # if renum==0:
-        #     #     print("no good 1")
-        #     particle_update = atom_trancate_center(particle, theta, phi)
-        #     renum += 1
-        # elif mr > mutation_rate / 2:# and mr <= mutation_rate * 2 / 3:
+    # if mr <= mutation_rate/3:  # / 2:
+    #     # renum = 0
+    #     # theta = random.uniform(0, np.pi)
+    #     # phi = random.uniform(0, 2 * np.pi)
+    #     # particle_update = atom_trancate_center(particle, theta, phi)
+    #     # while len(particle_update) < 5 and renum < 5:
+    #     #     theta = random.uniform(0, np.pi)
+    #     #     phi = random.uniform(0, 2 * np.pi)
+    #     #     # if renum==0:
+    #     #     #     print("no good 1")
+    #     #     particle_update = atom_trancate_center(particle, theta, phi)
+    #     #     renum += 1
+    if mr <= mutation_rate / 2:  # and mr <= mutation_rate * 2 / 3:
         renum = 0
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
@@ -399,15 +410,15 @@ def mutation(particle, lc, lattice_big, max_num_atoms, mutation_rate=0.3):
             phi = random.uniform(0, 2 * np.pi)
             particle_update = atom_trancate_arbi(particle, theta, phi)
             renum += 1
-    # elif mr > mutation_rate * 2 / 3 and mr <= mutation_rate:
-    #     # 2. initialization of populations
-    #     particle_update = ini_population(
-    #         lc=lc,
-    #         population_size=1,
-    #         lattice_big=lattice_big,
-    #         max_num_atoms=max_num_atoms,
-    #         num_atoms=None,
-    #     )[0]
+    elif mr > mutation_rate * 1 / 2 and mr <= mutation_rate:
+        # 2. initialization of populations
+        particle_update = ini_population(
+            lc=lc,
+            population_size=1,
+            lattice_big=lattice_big,
+            max_num_atoms=max_num_atoms,
+            num_atoms=None,
+        )[0]
 
     else:
         particle_update = particle
@@ -536,7 +547,6 @@ def genetic_algorithm(
     generations=40,
     population_size=100,
     lc=3.77,
-    mutation_rate=0.3,
     cross_over_rate=0.3,
     elite_fraction=0.05,
     initial_crowding_distance=0.1,
@@ -555,9 +565,14 @@ def genetic_algorithm(
     print(descriptors)
     num_lattice = max_num_atoms // 2  # since one unit cell of fcc lattice has 2 atoms
     n_max = int(np.ceil(np.cbrt(num_lattice)))
-    lattice_big = empty_lattice(
-        lc, int(np.sqrt(n_max**3)), int(np.sqrt(n_max**3)), int(np.sqrt(n_max**3))
+    lattice_big = extendfcc(
+        fccbasis(lc),
+        lc,
+        int(np.sqrt(n_max**3)),
+        int(np.sqrt(n_max**3)),
+        int(np.sqrt(n_max**3)),
     )
+    lattice_big = lattice_big - np.mean(lattice_big, axis=0)
 
     # 2. initialization of populations
     populations = ini_population(
@@ -657,20 +672,23 @@ def genetic_algorithm(
         new_populations.extend(elites)
         crowding_distance = initial_crowding_distance
         for child in new_populations:
-            most_similar_individual = find_most_similar(
-                populations, child, crowding_distance
-            )
-            if (
-                fitness(child, descriptors)[0]
-                <= fitness(most_similar_individual, descriptors)[0]
-            ):
-                index = 0
-                for ind in populations:
-                    if np.array_equal(ind, most_similar_individual):
-                        break
-                    index += 1
-                populations.pop(index)
-                populations.append(child)
+            try:
+                most_similar_individual = find_most_similar(
+                    populations, child, crowding_distance
+                )
+                if (
+                    fitness(child, descriptors)[0]
+                    <= fitness(most_similar_individual, descriptors)[0]
+                ):
+                    index = 0
+                    for ind in populations:
+                        if np.array_equal(ind, most_similar_individual):
+                            break
+                        index += 1
+                    populations.pop(index)
+                    populations.append(child)
+            except:
+                continue
         # for child in new_populations:
         #     print(f"child={populations}")
         #     most_similar_individual = find_most_similar(populations, child)
@@ -715,7 +733,7 @@ def genetic_algorithm(
         mutation_rate *= mutation_rate_decay
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict={best_predict}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict={best_predict} Mutation_rate={mutation_rate}"
         )
 
         # [6]. early stopping
@@ -748,25 +766,33 @@ def genetic_algorithm(
     # def genome(num_atoms):
     #     np.randomduplicates exist, then generate a new structure
 
+    # def genome(num_atoms):
+    #     np.randomduplicates exist, then generate a new structure
+
 
 if __name__ == "__main__":
     ini_configurations = {
         "max_num_atoms": 200,
         "generations": 100,
-        "population_size": 300,
+        "population_size": 100,
         "lc": 3.77,
-        "initial_mutation_rate": 1,
-        "mutation_rate_decay": 0.9,
         "cross_over_rate": 0.6,
-        "elite_fraction": 0.05,
-        "initial_crowding_distance": 0.1,
-        "niche_radius": 0.1,
+        "elite_fraction": 0.01,
+        "initial_crowding_distance": 0.02,
+        "niche_radius": 0.2,
         "alpha": 1,
+        "initial_mutation_rate": 1,
+        "mutation_rate_decay": 0.993,
         "descriptors": {
-            "diameter_2radius": 15.08,
+            "CN1": 8.47,
+            "CN2": 3.11,
+            "CN3": 11.29,
+            "CN4": 5.22,
+            # "diameter_2radius":15.08,
             "surface ratio": 0.78,
             "atom_number": 85,
-        },
+        }
+        # "Departure from sphere(moment)":0.0001,}
     }
 
     fitness_record, last_atom_list, ini_atom_list, best_particle = genetic_algorithm(
@@ -774,15 +800,15 @@ if __name__ == "__main__":
         generations=ini_configurations["generations"],
         population_size=ini_configurations["population_size"],
         lc=ini_configurations["lc"],
+        niche_radius=ini_configurations["niche_radius"],
+        alpha=ini_configurations["alpha"],
         initial_mutation_rate=ini_configurations["initial_mutation_rate"],
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
-        niche_radius=ini_configurations["niche_radius"],
-        initial_crowding_distance=ini_configurations["initial_crowding_distance"],
-        alpha=ini_configurations["alpha"],
         cross_over_rate=ini_configurations["cross_over_rate"],
         elite_fraction=ini_configurations["elite_fraction"],
         descriptors=ini_configurations["descriptors"],
     )
+
     particles_descriptors = []
     bas = []
 
