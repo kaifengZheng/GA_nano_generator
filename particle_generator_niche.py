@@ -194,14 +194,14 @@ def fitness(particle, descriptors: dict):
     # print(pred_dis)
     # MSE
     # np.sum((true_dis-pred_dis)**2)
-    x = np.sort(np.abs(pred_dis / true_dis - 1))
-    if cluster_descriptors["flattening_moment"] == 0:
-        sim = 100
+    x=np.sort(np.abs(pred_dis/true_dis-1))
+    if cluster_descriptors["flattening_moment"] >1:
+        sim = np.max(np.abs(1-pred_dis / true_dis ))*10**cluster_descriptors["flattening_moment"]
     else:
-        sim = np.mean(np.abs(1 - pred_dis / true_dis))
-    if x[-1] > 200:
-        x = x[x < 100]
-        sim = np.mean(x)
+        sim = np.max(np.abs(1-pred_dis / true_dis ))
+    if x[-1]>200:
+        x=x[x<100]
+        sim=np.max(x)
     return sim, pred_dis
 
 
@@ -722,8 +722,13 @@ def genetic_algorithm(
         best_fitness = min(fitness_values)
         ave_fitness = np.mean(fitness_values)
         std_fitness = np.std(fitness_values)
-        best_predict = predict_values[fitness_values.index(best_fitness)]
+        # best_predict = predict_values[fitness_values.index(best_fitness)]
+        fitness_value_sort=sorted(fitness_values)
+        quater_fitness_index=np.where(np.array(fitness_values)<=fitness_value_sort[int(len(fitness_values)*0.75)])[0][0]
+        predict_quater=predict_values[quater_fitness_index]
+
         best_index = fitness_values.index(best_fitness)
+        mean_predict = np.mean(predict_values)
         # [2]. reconstruct the best solution from codes using new_populations.
         particle = populations[best_index]
         # best_clustering_energy=min(clustering_energy_values)
@@ -733,8 +738,9 @@ def genetic_algorithm(
         mutation_rate *= mutation_rate_decay
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict={best_predict} Mutation_rate={mutation_rate}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict={predict_quater}"
         )
+
 
         # [6]. early stopping
         # if generation>10:
@@ -818,4 +824,5 @@ if __name__ == "__main__":
     pdes.hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis.png")
+    write_file(last_atom_list, "output")
     write_file(last_atom_list, "output")
