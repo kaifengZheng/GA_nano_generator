@@ -824,5 +824,22 @@ if __name__ == "__main__":
     pdes.hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis.png")
+    fig=plt.figure(figsize=(4,3))
+    ax = fig.add_subplot(121, projection='3d')
+    atom_model(xyz_filename=filename[num+i],ax=ax)
+    ax = fig.add_subplot(122)
+    k=filename[num+i].split('\\')[-1].split('.')[0]
+    try:
+        ax.plot(spectra["Energy"],spectra[k])
+    except:
+        continue
+    ax.set_xlabel("Energy(eV)")
+    ax.set_ylabel("Intensity")
+    low=(np.max(spectra[k])-np.min(spectra[k]))*0.5+np.min(spectra[k])
+    ax.text(11606,low,f'oblateness={np.round(label.loc["flatten",k],3)}\ndiameter={np.round(label.loc["diameter",k],3)}\nsurface ratio={np.round(label.loc["surface ratio",k],3)}\nnumber_atom={np.round(label.loc["atom_number",k],3)}\nCN={np.round(label.loc["CN",k],3)}\nbond length={bond_length(filename[num+i])}',fontdict={"size":12,"color":"green","family":"Arial"})
+    ax.set_title(k) 
+    plt.tight_layout()
+    fig.savefig(f"plots\\{k}.png",dpi=200)
+    plt.close("all")
     write_file(last_atom_list, "output")
     write_file(last_atom_list, "output")
