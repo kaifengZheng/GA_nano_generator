@@ -14,6 +14,7 @@ import random
 from tqdm.auto import tqdm
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial import cKDTree
+from ase.io.x3d import write_x3d
 import os
 
 
@@ -187,21 +188,23 @@ def ini_population(
 
 def fitness(particle, descriptors: dict):
     atom = Atoms(positions=particle, symbols=["Pt"] * len(particle))
-    cluster_descriptors = descriptor_table(atom)
+    cluster_descriptors = descriptor_table(
+        atom, all=False, descriptors=list(descriptors.keys()) + ["flattening_moment"]
+    )
     true_dis = np.array([descriptors[k] for k in descriptors.keys()])
     # print(true_dis)
     pred_dis = np.array([cluster_descriptors[k] for k in descriptors.keys()])
     # print(pred_dis)
     # MSE
     # np.sum((true_dis-pred_dis)**2)
-    x=np.sort(np.abs(pred_dis/true_dis-1))
-    if cluster_descriptors["flattening_moment"] >1:
-        sim = np.max(np.abs(1-pred_dis / true_dis ))*10**cluster_descriptors["flattening_moment"]
+    x = np.sort(np.abs(pred_dis / true_dis - 1))
+    if cluster_descriptors["flattening_moment"] > 1:
+        sim = (
+            np.max(np.abs(1 - pred_dis / true_dis))
+            * 10 ** cluster_descriptors["flattening_moment"]
+        )
     else:
-        sim = np.max(np.abs(1-pred_dis / true_dis ))
-    if x[-1]>200:
-        x=x[x<100]
-        sim=np.max(x)
+        sim = np.mean(np.power(1 - pred_dis / true_dis, 2))
     return sim, pred_dis
 
 
@@ -723,9 +726,12 @@ def genetic_algorithm(
         ave_fitness = np.mean(fitness_values)
         std_fitness = np.std(fitness_values)
         # best_predict = predict_values[fitness_values.index(best_fitness)]
-        fitness_value_sort=sorted(fitness_values)
-        quater_fitness_index=np.where(np.array(fitness_values)<=fitness_value_sort[int(len(fitness_values)*0.75)])[0][0]
-        predict_quater=predict_values[quater_fitness_index]
+        fitness_value_sort = sorted(fitness_values)
+        quater_fitness_index = np.where(
+            np.array(fitness_values)
+            <= fitness_value_sort[int(len(fitness_values) * 0.75)]
+        )[0][0]
+        predict_quater = predict_values[quater_fitness_index]
 
         best_index = fitness_values.index(best_fitness)
         mean_predict = np.mean(predict_values)
@@ -738,9 +744,8 @@ def genetic_algorithm(
         mutation_rate *= mutation_rate_decay
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict={predict_quater}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={predict_quater}"
         )
-
 
         # [6]. early stopping
         # if generation>10:
@@ -751,7 +756,7 @@ def genetic_algorithm(
     best_index = fitness_values.index(best_fitness)
     print(f"best_index={best_index}")
     best_solution = populations[best_index]
-    best_atom = Atoms(positions=best_solution, symbols=["Pt"] * len(best_solution))
+    # best_atom = Atoms(positions=best_solution, symbols=["Pt"] * len(best_solution))
     last_population = populations
     last_atom_list = []
     for i in range(len(last_population)):
@@ -779,24 +784,25 @@ def genetic_algorithm(
 if __name__ == "__main__":
     ini_configurations = {
         "max_num_atoms": 200,
-        "generations": 100,
+        "generations": 200,
         "population_size": 100,
         "lc": 3.77,
         "cross_over_rate": 0.6,
-        "elite_fraction": 0.01,
-        "initial_crowding_distance": 0.02,
-        "niche_radius": 0.2,
+        "elite_fraction": 0.1,
+        "initial_crowding_distance": 0.1,
+        "niche_radius": 0.1,
         "alpha": 1,
-        "initial_mutation_rate": 1,
+        "initial_mutation_rate": 0.9,
         "mutation_rate_decay": 0.993,
         "descriptors": {
             "CN1": 8.47,
-            "CN2": 3.11,
-            "CN3": 11.29,
-            "CN4": 5.22,
-            # "diameter_2radius":15.08,
+            # "CN2":3.11,
+            # "CN3":11.29,
+            # "CN4":5.22,
+            # "flattening_pca": 1,
+            "diameter_2radius": 15.08,
             "surface ratio": 0.78,
-            "atom_number": 85,
+            # "atom_number": 85,
         }
         # "Departure from sphere(moment)":0.0001,}
     }
@@ -819,27 +825,13 @@ if __name__ == "__main__":
     bas = []
 
     for i in range(len(last_atom_list)):
-        particles_descriptors.append(descriptor_table(last_atom_list[i]))
+        particles_descriptors.append(descriptor_table(last_atom_list[i], all=True))
     pdes = pd.DataFrame(particles_descriptors)
     pdes.hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis.png")
-    fig=plt.figure(figsize=(4,3))
-    ax = fig.add_subplot(121, projection='3d')
-    atom_model(xyz_filename=filename[num+i],ax=ax)
-    ax = fig.add_subplot(122)
-    k=filename[num+i].split('\\')[-1].split('.')[0]
-    try:
-        ax.plot(spectra["Energy"],spectra[k])
-    except:
-        continue
-    ax.set_xlabel("Energy(eV)")
-    ax.set_ylabel("Intensity")
-    low=(np.max(spectra[k])-np.min(spectra[k]))*0.5+np.min(spectra[k])
-    ax.text(11606,low,f'oblateness={np.round(label.loc["flatten",k],3)}\ndiameter={np.round(label.loc["diameter",k],3)}\nsurface ratio={np.round(label.loc["surface ratio",k],3)}\nnumber_atom={np.round(label.loc["atom_number",k],3)}\nCN={np.round(label.loc["CN",k],3)}\nbond length={bond_length(filename[num+i])}',fontdict={"size":12,"color":"green","family":"Arial"})
-    ax.set_title(k) 
-    plt.tight_layout()
-    fig.savefig(f"plots\\{k}.png",dpi=200)
+    write("best.png", best_particle[-1], rotation="45x,45y,45z")
+
     plt.close("all")
     write_file(last_atom_list, "output")
     write_file(last_atom_list, "output")
