@@ -191,17 +191,19 @@ def fitness(particle, descriptors: dict):
     cluster_descriptors = descriptor_table(
         atom, all=False, descriptors=list(descriptors.keys()) + ["flattening_moment"]
     )
-    true_dis=[]
+    true_dis = []
     for k in descriptors.keys():
-        if k!='ellipsoid':
+        if k != "ellipsoid":
             true_dis.append(descriptors[k])
         else:
             true_dis.append(descriptors[k][0])
             true_dis.append(descriptors[k][1])
             true_dis.append(descriptors[k][2])
-    true_dis=np.array(true_dis)
+    true_dis = np.array(true_dis)
     # print(true_dis)
-    pred_dis = np.array([cluster_descriptors[k] for k in list(cluster_descriptors.keys())[:-1]])
+    pred_dis = np.array(
+        [cluster_descriptors[k] for k in list(cluster_descriptors.keys())[:-1]]
+    )
     # print(pred_dis)
     # MSE
     # np.sum((true_dis-pred_dis)**2)
@@ -552,35 +554,35 @@ def write_file(Atoms_list, foldername):
         write(f"{foldername}/individual_{n}.xyz", atoms, format="xyz")
         n += 1
 
-def draw_ellipsoid(atoms,save=False):
-    position=atoms.get_positions()
-    radii=ellipsoid(atoms)
-    center=radii[3]
-    rotation=radii[4]
+
+def draw_ellipsoid(atoms, save=False):
+    position = atoms.get_positions()
+    radii = ellipsoid(atoms)
+    center = radii[3]
+    rotation = radii[4]
     # Create a grid of points
     u = np.linspace(0, 2 * np.pi, 100)
     v = np.linspace(0, np.pi, 100)
-    
+
     # Create the ellipsoid points in the local space
-    x = radii[0] *  np.outer(np.sin(v), np.cos(u))
-    y = radii[1] *  np.outer(np.sin(v), np.sin(u))
-    z = radii[2] *  np.outer(np.cos(v), np.ones_like(u))
-    
+    x = radii[0] * np.outer(np.sin(v), np.cos(u))
+    y = radii[1] * np.outer(np.sin(v), np.sin(u))
+    z = radii[2] * np.outer(np.cos(v), np.ones_like(u))
 
-
-
-    
     for i in range(len(x)):
         for j in range(len(x[0])):
             # print(np.dot([x[i, j], y[i, j], z[i, j]], radii) * rotation + center)
-            [x[i, j], y[i, j], z[i, j]] = np.dot(rotation,[x[i, j], y[i, j], z[i, j]]) + center
+            [x[i, j], y[i, j], z[i, j]] = (
+                np.dot(rotation, [x[i, j], y[i, j], z[i, j]]) + center
+            )
 
     # Plot ellipsoid
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(x, y, z,  rstride=4, cstride=4, color='cyan', alpha=0.3)
-    ax.scatter(position[:,0], position[:,1], position[:,2], color='red')
-    fig.savefig('ellipsoid.png')
+    ax = fig.add_subplot(111, projection="3d")
+    ax.plot_surface(x, y, z, rstride=4, cstride=4, color="cyan", alpha=0.3)
+    ax.scatter(position[:, 0], position[:, 1], position[:, 2], color="red")
+    fig.savefig("ellipsoid.png")
+
 
 def genetic_algorithm(
     max_num_atoms=200,
@@ -791,7 +793,7 @@ def genetic_algorithm(
         #         break
     # 4. record the best solution
     best_index = fitness_values.index(best_fitness)
-    
+
     print(f"best_index={best_index}")
     print(f"best_fitness={best_fitness},best_predict={predict_values[best_index]}")
     best_solution = populations[best_index]
@@ -824,7 +826,7 @@ if __name__ == "__main__":
     ini_configurations = {
         "max_num_atoms": 200,
         "generations": 200,
-        "population_size": 100,
+        "population_size": 150,
         "lc": 3.77,
         "cross_over_rate": 0.6,
         "elite_fraction": 0.1,
@@ -874,4 +876,4 @@ if __name__ == "__main__":
     plt.close("all")
     write_file(last_atom_list, "output")
     write_file(last_atom_list, "output")
-    draw_ellipsoid(best_particle[-1],save=True)
+    draw_ellipsoid(best_particle[-1], save=True)
