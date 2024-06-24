@@ -791,7 +791,9 @@ def genetic_algorithm(
         #         break
     # 4. record the best solution
     best_index = fitness_values.index(best_fitness)
+    
     print(f"best_index={best_index}")
+    print(f"best_fitness={best_fitness},best_predict={predict_values[best_index]}")
     best_solution = populations[best_index]
     # best_atom = Atoms(positions=best_solution, symbols=["Pt"] * len(best_solution))
     last_population = populations
