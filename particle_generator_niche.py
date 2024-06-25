@@ -555,7 +555,7 @@ def write_file(Atoms_list, foldername):
         n += 1
 
 
-def draw_ellipsoid(atoms, save=False):
+def draw_ellipsoid(atoms, save=False, filename="ellipsoid.png"):
     position = atoms.get_positions()
     radii = ellipsoid(atoms)
     center = radii[3]
@@ -581,7 +581,7 @@ def draw_ellipsoid(atoms, save=False):
     ax = fig.add_subplot(111, projection="3d")
     ax.plot_surface(x, y, z, rstride=4, cstride=4, color="cyan", alpha=0.3)
     ax.scatter(position[:, 0], position[:, 1], position[:, 2], color="red")
-    fig.savefig("ellipsoid.png")
+    fig.savefig(filename)
 
 
 def genetic_algorithm(
@@ -635,9 +635,10 @@ def genetic_algorithm(
     fitness_values = fitness_sharing(populations, descriptors, niche_radius, alpha)[0]
     # print(len(fitness_values),len(populations))
     # 4. start iteration
-    for generation in tqdm(range(generations)):
+    for generation in (pbar := tqdm(range(generations))):
         # clustering_energy_values=[clustering_energy(genome,lattice) for genome in population]
         # (1). generate new populations
+        pbar.set_description(f"mutation_rate={np.round(mutation_rate,5)}")
         new_populations = []
         fit_pop = dict()
         for i in range(len(populations)):
@@ -781,6 +782,7 @@ def genetic_algorithm(
         best_particle.append(Atoms(positions=particle, symbols=["Pt"] * len(particle)))
         fitness_record.append(ave_fitness)  # dong
         mutation_rate *= mutation_rate_decay
+        # print(mutation_rate)
         # [4]. print output
         print(
             f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={predict_quater}"
@@ -826,23 +828,23 @@ if __name__ == "__main__":
     ini_configurations = {
         "max_num_atoms": 200,
         "generations": 200,
-        "population_size": 150,
-        "lc": 3.77,
+        "population_size": 250,
+        "lc": 3.924,
         "cross_over_rate": 0.6,
         "elite_fraction": 0.1,
         "initial_crowding_distance": 0.1,
         "niche_radius": 0.1,
         "alpha": 1,
-        "initial_mutation_rate": 0.9,
-        "mutation_rate_decay": 0.993,
+        "initial_mutation_rate": 1,
+        "mutation_rate_decay": 0.995,
         "descriptors": {
-            "CN1": 8.47,
-            # "CN2":3.11,
-            # "CN3":11.29,
-            # "CN4":5.22,
+            "CN1": 7.7,
+            "CN2": 3.8,
+            "CN3": 4,
+            "CN4": 3.9,
             # "flattening_pca": 1,
-            "diameter_2radius": 15.08,
-            "surface ratio": 0.78,
+            # "diameter_2radius": 15.08,
+            # "surface ratio": 0.78,
             # "atom_number": 85,
         }
         # "Departure from sphere(moment)":0.0001,}
@@ -864,16 +866,21 @@ if __name__ == "__main__":
 
     particles_descriptors = []
     bas = []
-
+    extend = "S3"
     for i in range(len(last_atom_list)):
         particles_descriptors.append(descriptor_table(last_atom_list[i], all=True))
+
     pdes = pd.DataFrame(particles_descriptors)
+    pdes.to_csv("descriptors_" + extend + ".csv")
     pdes.hist(bins=100)
     plt.tight_layout()
-    plt.savefig("dis.png")
-    write("best.png", best_particle[-1], rotation="45x,45y,45z")
-
+    plt.savefig("dis_" + extend + ".png")
+    write("best_" + extend + ".png", best_particle[-1], rotation="45x,45y,45z")
     plt.close("all")
-    write_file(last_atom_list, "output")
-    write_file(last_atom_list, "output")
-    draw_ellipsoid(best_particle[-1], save=True)
+    write_file(last_atom_list, "output_" + extend)
+    try:
+       draw_ellipsoid(
+           best_particle[-1], save=True, filename="ellipsoid_" + extend + ".png"
+           )
+    except:
+        pass
