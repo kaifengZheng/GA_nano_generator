@@ -214,7 +214,7 @@ def fitness(particle, descriptors: dict):
             * 10 ** cluster_descriptors["flattening_moment"]
         )
     else:
-        sim = np.mean(np.power(1 - pred_dis / true_dis, 2))
+        sim = np.mean(np.abs((1 - pred_dis / true_dis)))
     return sim, pred_dis
 
 
@@ -764,7 +764,7 @@ def genetic_algorithm(
         # [1]. best fitness value and prediction
         best_fitness = min(fitness_values)
         ave_fitness = np.mean(fitness_values)
-        std_fitness = np.std(fitness_values)
+        # std_fitness = np.std(fitness_values)
         # best_predict = predict_values[fitness_values.index(best_fitness)]
         fitness_value_sort = sorted(fitness_values)
         quater_fitness_index = np.where(
@@ -827,13 +827,13 @@ def genetic_algorithm(
 if __name__ == "__main__":
     ini_configurations = {
         "max_num_atoms": 200,
-        "generations": 200,
-        "population_size": 250,
+        "generations": 150,
+        "population_size": 100,
         "lc": 3.924,
         "cross_over_rate": 0.6,
         "elite_fraction": 0.1,
         "initial_crowding_distance": 0.1,
-        "niche_radius": 0.1,
+        "niche_radius": 0.01,
         "alpha": 1,
         "initial_mutation_rate": 1,
         "mutation_rate_decay": 0.995,
@@ -879,8 +879,8 @@ if __name__ == "__main__":
     plt.close("all")
     write_file(last_atom_list, "output_" + extend)
     try:
-       draw_ellipsoid(
-           best_particle[-1], save=True, filename="ellipsoid_" + extend + ".png"
-           )
+        draw_ellipsoid(
+            best_particle[-1], save=True, filename="ellipsoid_" + extend + ".png"
+        )
     except:
         pass
