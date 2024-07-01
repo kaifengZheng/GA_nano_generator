@@ -16,6 +16,8 @@ from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial import cKDTree
 from ase.io.x3d import write_x3d
 import os
+import toml
+from time import time
 
 
 def fccbasis(a):
@@ -186,7 +188,7 @@ def ini_population(
     return generations
 
 
-def fitness(particle, descriptors: dict):
+def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum"):
     atom = Atoms(positions=particle, symbols=["Pt"] * len(particle))
     cluster_descriptors = descriptor_table(
         atom, all=False, descriptors=list(descriptors.keys()) + ["flattening_moment"]
@@ -207,14 +209,35 @@ def fitness(particle, descriptors: dict):
     # print(pred_dis)
     # MSE
     # np.sum((true_dis-pred_dis)**2)
-    x = np.sort(np.abs(pred_dis / true_dis - 1))
+    sim = 0
     if cluster_descriptors["flattening_moment"] > 1:
-        sim = (
-            np.max(np.abs(1 - pred_dis / true_dis))
-            * 10 ** cluster_descriptors["flattening_moment"]
-        )
+        if fitness_func=="L1":
+            sim = np.abs(true_dis - pred_dis)
+        elif fitness_func=="L2":
+            sim = np.power(true_dis - pred_dis, 2)
+        elif fitness_func=="RAE":
+            sim = (np.abs(true_dis - pred_dis) / true_dis)
+
+        if reduction=="sum":
+            sim = np.sum(sim) * 10 ** cluster_descriptors["flattening_moment"]
+        elif reduction=="mean":
+            sim = np.mean(sim) * 10 ** cluster_descriptors["flattening_moment"]
+        elif reduction=="max":
+            sim = np.max(sim) * 10 ** cluster_descriptors["flattening_moment"]
     else:
-        sim = np.mean(np.abs((1 - pred_dis / true_dis)))
+        if fitness_func=="L1":
+            sim = np.abs(true_dis - pred_dis)
+            # print(sim)
+        elif fitness_func=="L2":
+            sim = np.power(true_dis - pred_dis, 2)
+        elif fitness_func=="RAE":
+            sim = (np.abs(true_dis - pred_dis) / true_dis)
+        if reduction=="sum":
+            sim = np.sum(sim) 
+        elif reduction=="mean":
+            sim = np.mean(sim) 
+        elif reduction=="max":
+            sim = np.max(sim)
     return sim, pred_dis
 
 
@@ -526,20 +549,20 @@ def calculate_similarity(ind1, ind2, crowding_distance=0.1):
     return dist / crowding_distance
 
 
-def shared_fitness_value(individual, descriptor, population, niche_radius, alpha):
-    fitnessvalue, predict_value = fitness(individual, descriptor)
+def shared_fitness_value(individual, descriptor, population, niche_radius, alpha,fitness_func,reduction):
+    fitnessvalue, predict_value = fitness(individual, descriptor,fitness_func,reduction)
     sharing_sum = sum(
         sharing_function(individual, other, niche_radius, alpha) for other in population
     )
     return fitnessvalue / sharing_sum, predict_value
 
 
-def fitness_sharing(population, descriptor, niche_radius, alpha):
+def fitness_sharing(population, descriptor, niche_radius, alpha,fitness_func="L1",reduction="sum"):
     shared_fitness = []
     predict_values = []
     for individual in population:
         fitness_value, predict_value = shared_fitness_value(
-            individual, descriptor, population, niche_radius, alpha
+            individual, descriptor, population, niche_radius, alpha,fitness_func,reduction
         )
         shared_fitness.append(fitness_value)
         predict_values.append(predict_value)
@@ -596,6 +619,8 @@ def genetic_algorithm(
     alpha=1,
     initial_mutation_rate=1,
     mutation_rate_decay=0.9,
+    fitness_func="L1",
+    reduction="sum",
     descriptors={"flattening_moment": 1, "atom_number": 55}
     # "CN1":6,
     # "CN2":1.5,
@@ -630,12 +655,13 @@ def genetic_algorithm(
     #     populations_ini_mute.append(mutation(populations[i],lc,max_num_atoms,mutation_rate=0.5))
     ini_population_record = populations.copy()
     fitness_record = []
-    best_particle = []
+    # best_particle = []
     # 3. calculate fitness for populations
     fitness_values = fitness_sharing(populations, descriptors, niche_radius, alpha)[0]
     # print(len(fitness_values),len(populations))
     # 4. start iteration
     for generation in (pbar := tqdm(range(generations))):
+        time_start=time()
         # clustering_energy_values=[clustering_energy(genome,lattice) for genome in population]
         # (1). generate new populations
         pbar.set_description(f"mutation_rate={np.round(mutation_rate,5)}")
@@ -755,7 +781,7 @@ def genetic_algorithm(
         # print(f"genome={genome}")
         # fitness_cal = fitness(particle, descriptors)
         fitness_values, predict_values = fitness_sharing(
-            populations, descriptors, initial_crowding_distance, alpha
+            populations, descriptors, initial_crowding_distance, alpha,fitness_func,reduction
         )
         # fitness_values.append(fitness_cal[0])
         # predict_values.append(fitness_cal[1])
@@ -779,13 +805,16 @@ def genetic_algorithm(
         particle = populations[best_index]
         # best_clustering_energy=min(clustering_energy_values)
         # [3]. record the reconstructed particles using Atoms objects.
-        best_particle.append(Atoms(positions=particle, symbols=["Pt"] * len(particle)))
+        # best_particle.append(Atoms(positions=particle, symbols=["Pt"] * len(particle)))
         fitness_record.append(ave_fitness)  # dong
         mutation_rate *= mutation_rate_decay
+        time_end = time()
+        time_cost = time_end - time_start
+        time_cost_record.append(time_cost)
         # print(mutation_rate)
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={predict_quater}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={predict_quater} time_cost={time_cost}"
         )
 
         # [6]. early stopping
@@ -816,7 +845,7 @@ def genetic_algorithm(
                 symbols=["Pt"] * len(ini_population_record[i]),
             )
         )
-    return fitness_record, last_atom_list, ini_atom_list, best_particle
+    return fitness_record, last_atom_list, ini_atom_list, fitness_values, time_cost_record
     # def genome(num_atoms):
     #     np.randomduplicates exist, then generate a new structure
 
@@ -825,32 +854,9 @@ def genetic_algorithm(
 
 
 if __name__ == "__main__":
-    ini_configurations = {
-        "max_num_atoms": 200,
-        "generations": 150,
-        "population_size": 100,
-        "lc": 3.924,
-        "cross_over_rate": 0.6,
-        "elite_fraction": 0.1,
-        "initial_crowding_distance": 0.1,
-        "niche_radius": 0.01,
-        "alpha": 1,
-        "initial_mutation_rate": 1,
-        "mutation_rate_decay": 0.995,
-        "descriptors": {
-            "CN1": 7.7,
-            "CN2": 3.8,
-            "CN3": 4,
-            "CN4": 3.9,
-            # "flattening_pca": 1,
-            # "diameter_2radius": 15.08,
-            # "surface ratio": 0.78,
-            # "atom_number": 85,
-        }
-        # "Departure from sphere(moment)":0.0001,}
-    }
+    ini_configurations=toml.load("config.toml")
 
-    fitness_record, last_atom_list, ini_atom_list, best_particle = genetic_algorithm(
+    fitness_record, last_atom_list, ini_atom_list, best_particle,fitness_values,time_cost_record = genetic_algorithm(
         max_num_atoms=ini_configurations["max_num_atoms"],
         generations=ini_configurations["generations"],
         population_size=ini_configurations["population_size"],
@@ -859,8 +865,11 @@ if __name__ == "__main__":
         alpha=ini_configurations["alpha"],
         initial_mutation_rate=ini_configurations["initial_mutation_rate"],
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
+        initial_crowding_distance=ini_configurations["initial_crowding_distance"],
         cross_over_rate=ini_configurations["cross_over_rate"],
         elite_fraction=ini_configurations["elite_fraction"],
+        fitness_func=ini_configurations["fitness_func"],
+        reduction=ini_configurations["reduction"],
         descriptors=ini_configurations["descriptors"],
     )
 
