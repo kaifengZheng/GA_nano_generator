@@ -874,14 +874,20 @@ if __name__ == "__main__":
     )
 
     particles_descriptors = []
-    bas = []
+    rankings=ranking_fitness(fitness_values)
+    index=[]
+    for i in range(len(rankings)):
+        index.extend(np.where(rankings==i+1)[0])
+        if len(index)>=len(rankings)*3//4: # 3/4 of the good solutions
+            break
     extend = "S3"
-    for i in range(len(last_atom_list)):
-        particles_descriptors.append(descriptor_table(last_atom_list[i], all=True))
+    Atoms_3quarter=[last_atom_list[i] for i in index]
+    for i in range(len(Atoms_3quarter)):
+        particles_descriptors.append(descriptor_table(Atoms_3quarter[i], all=True))
 
     pdes = pd.DataFrame(particles_descriptors)
     pdes.to_csv("descriptors_" + extend + ".csv")
-    pdes.hist(bins=100)
+    pdes[ini_configurations["plot_descriptors"]].hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis_" + extend + ".png")
     write("best_" + extend + ".png", best_particle[-1], rotation="45x,45y,45z")

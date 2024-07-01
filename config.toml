@@ -11,6 +11,7 @@ initial_mutation_rate=1
 mutation_rate_decay=0.993
 fitness_func="L1"
 reduction="sum"
+plot_descriptor=["CN1","CN2","CN3","CN4","diameter_2_radius","surface ratio"]
 [descriptors]
 CN1=8.1
 CN2=3.7
