@@ -1,5 +1,4 @@
 from itertools import *
-import seaborn as sea
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -655,6 +654,7 @@ def genetic_algorithm(
     #     populations_ini_mute.append(mutation(populations[i],lc,max_num_atoms,mutation_rate=0.5))
     ini_population_record = populations.copy()
     fitness_record = []
+    time_cost_record=[]
     # best_particle = []
     # 3. calculate fitness for populations
     fitness_values = fitness_sharing(populations, descriptors, niche_radius, alpha)[0]
@@ -856,7 +856,7 @@ def genetic_algorithm(
 if __name__ == "__main__":
     ini_configurations=toml.load("config.toml")
 
-    fitness_record, last_atom_list, ini_atom_list, best_particle,fitness_values,time_cost_record = genetic_algorithm(
+    fitness_record, last_atom_list, ini_atom_list,fitness_values,time_cost_record = genetic_algorithm(
         max_num_atoms=ini_configurations["max_num_atoms"],
         generations=ini_configurations["generations"],
         population_size=ini_configurations["population_size"],
@@ -880,7 +880,7 @@ if __name__ == "__main__":
         index.extend(np.where(rankings==i+1)[0])
         if len(index)>=len(rankings)*3//4: # 3/4 of the good solutions
             break
-    extend = "S3"
+    extend = "S2"
     Atoms_3quarter=[last_atom_list[i] for i in index]
     for i in range(len(Atoms_3quarter)):
         particles_descriptors.append(descriptor_table(Atoms_3quarter[i], all=True))
@@ -890,7 +890,7 @@ if __name__ == "__main__":
     pdes[ini_configurations["plot_descriptors"]].hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis_" + extend + ".png")
-    write("best_" + extend + ".png", best_particle[-1], rotation="45x,45y,45z")
+    write("best_" + extend + ".png", last_atom_list[index[0]], rotation="45x,45y,45z")
     plt.close("all")
     write_file(last_atom_list, "output_" + extend)
     try:
