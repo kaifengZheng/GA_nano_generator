@@ -880,7 +880,7 @@ if __name__ == "__main__":
         index.extend(np.where(rankings==i+1)[0])
         if len(index)>=len(rankings)*3//4: # 3/4 of the good solutions
             break
-    extend = "S2"
+    extend = ini_configurations["sample_name"]
     Atoms_3quarter=[last_atom_list[i] for i in index]
     for i in range(len(Atoms_3quarter)):
         particles_descriptors.append(descriptor_table(Atoms_3quarter[i], all=True))

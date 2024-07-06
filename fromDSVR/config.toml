@@ -1,4 +1,4 @@
-sample_name="S3"
+sample_name="S3_try"
 max_num_atoms=200
 generations=200
 population_size=150
@@ -10,8 +10,8 @@ niche_radius=0.1
 alpha=1
 initial_mutation_rate=1
 mutation_rate_decay=0.993
-fitness_func="L1"
-reduction="sum"
+fitness_func="RAE" #RAE, L1,L2
+reduction="max"   #mean max sum
 plot_descriptors=["CN1","CN2","CN3","CN4","diameter_2radius","surface ratio"]
 [descriptors]
 "diameter_2radius"=12.08
