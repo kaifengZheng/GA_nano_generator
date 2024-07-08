@@ -1,22 +1,35 @@
-sample_name="S3_try"
+sample_name="A1"
 max_num_atoms=200
-generations=200
+generations=300
 population_size=150
 lc=3.924
 cross_over_rate=0.6
-elite_fraction=0.05
+elite_fraction=0.01
+fitness_weight=[1,3]
 initial_crowding_distance=0.1
-niche_radius=0.1
+niche_radius=1
 alpha=1
 initial_mutation_rate=1
-mutation_rate_decay=0.993
+mutation_rate_decay=0.999
 fitness_func="RAE" #RAE, L1,L2
 reduction="max"   #mean max sum
 plot_descriptors=["CN1","CN2","CN3","CN4","diameter_2radius","surface ratio"]
 [descriptors]
-"diameter_2radius"=12.08
-"surface ratio"=0.7632
-
+#S3
+#"diameter_2radius"=12.08
+#"surface ratio"=0.7632
+#S1
+#"diameter_2radius"=10.60
+#"surface ratio"=0.8471
+#S2
+#"diameter_2radius"=13.68
+#"surface ratio"=0.6491
+#S4
+#"diameter_2radius"=13.72
+#"surface ratio"=0.6605
+#A1
+"diameter_2radius"=9.42
+"surface ratio"=0.9177
 #CN1=8.1 #s2
 #CN2=3.7
 #CN3=8
