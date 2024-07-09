@@ -1,4 +1,4 @@
-sample_name="A1"
+sample_name="A2"
 max_num_atoms=200
 generations=300
 population_size=150
@@ -28,8 +28,11 @@ plot_descriptors=["CN1","CN2","CN3","CN4","diameter_2radius","surface ratio"]
 #"diameter_2radius"=13.72
 #"surface ratio"=0.6605
 #A1
-"diameter_2radius"=9.42
-"surface ratio"=0.9177
+#"diameter_2radius"=9.42
+#"surface ratio"=0.9177
+#A2
+"diameter_2radius"=12.42
+"surface ratio"=0.9238
 #CN1=8.1 #s2
 #CN2=3.7
 #CN3=8
