@@ -1,11 +1,11 @@
-sample_name="S3_10"
+sample_name="S3"
 max_num_atoms=200
 generations=300
 population_size=150
 lc=3.924
 cross_over_rate=0.6
 elite_fraction=0.01
-fitness_weight=[1,10]
+fitness_weight=[1,5]
 initial_crowding_distance=0.1
 niche_radius=1
 alpha=1
