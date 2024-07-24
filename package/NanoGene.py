@@ -192,7 +192,7 @@ def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weig
         weight=np.array([1]*len(descriptors.keys()))
     atom = Atoms(positions=particle, symbols=["Pt"] * len(particle))
     cluster_descriptors = descriptor_table(
-        atom, all=False, descriptors=list(descriptors.keys()) + ["flattening_moment"]
+        atom, all=False, descriptors=list(descriptors.keys()) + ["oblateness_moment"]
     )
     true_dis = []
     for k in descriptors.keys():
@@ -211,7 +211,7 @@ def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weig
     # MSE
     # np.sum((true_dis-pred_dis)**2)
     sim = 0
-    if cluster_descriptors["flattening_moment"] > 1:
+    if cluster_descriptors["oblateness_moment"] > 1:
         if fitness_func=="L1":
             sim = np.abs(true_dis - pred_dis)
         elif fitness_func=="L2":
@@ -220,11 +220,11 @@ def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weig
             sim = (np.abs(true_dis - pred_dis) / true_dis)
 
         if reduction=="sum":
-            sim = np.dot(sim,weight) * 10 ** cluster_descriptors["flattening_moment"]
+            sim = np.dot(sim,weight) * 10 ** cluster_descriptors["oblateness_moment"]
         elif reduction=="mean":
-            sim = np.dot(sim,weight)/np.sum(weight) * 10 ** cluster_descriptors["flattening_moment"]
+            sim = np.dot(sim,weight)/np.sum(weight) * 10 ** cluster_descriptors["oblateness_moment"]
         elif reduction=="max":
-            sim = np.max(np.multiply(sim,weight)) * 10 ** cluster_descriptors["flattening_moment"]
+            sim = np.max(np.multiply(sim,weight)) * 10 ** cluster_descriptors["oblateness_moment"]
     else:
         if fitness_func=="L1":
             sim = np.abs(true_dis - pred_dis)
@@ -623,7 +623,7 @@ def genetic_algorithm(
     weight=None,
     fitness_func="L1",
     reduction="sum",
-    descriptors={"flattening_moment": 1, "atom_number": 55}
+    descriptors={"oblateness_moment": 1, "atom_number": 55}
     # "CN1":6,
     # "CN2":1.5,
     # "CN3":2,
