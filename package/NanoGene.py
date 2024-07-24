@@ -897,6 +897,11 @@ if __name__ == "__main__":
     write("best_" + extend + ".png", last_atom_list[index[0]], rotation="45x,45y,45z")
     plt.close("all")
     write_file(last_atom_list, "output_" + extend)
+    fitness_record=np.array(fitness_record)
+    fitness_values=np.array(fitness_values)
+    np.savetxt("fitness_values.txt",fitness_record)
+    np.savetxt("last_fitness.txt",fitness_values)
+
     try:
         draw_ellipsoid(
             best_particle[-1], save=True, filename="ellipsoid_" + extend + ".png"
