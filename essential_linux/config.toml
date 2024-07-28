@@ -1,7 +1,7 @@
-sample_name="S3"
-max_num_atoms=200
-generations=5
-population_size=10
+sample_name="ob_size"
+max_num_atoms=300
+generations=300
+population_size=200
 lc=3.924
 cross_over_rate=0.6
 elite_fraction=0.01
@@ -16,8 +16,8 @@ reduction="max"   #mean max sum
 plot_descriptors=["CN1","CN2","CN3","CN4","GCN1","oblateness_moment","atom_number","diameter_2radius","SVR_CN"]
 [descriptors]
 #S3
-"diameter_2radius"=1.86
-"SVR_CN"=0.70
+"diameter_2radius"=18.6
+"oblateness_moment"=0.56
 #S1
 #"diameter_2radius"=10.60
 #"surface ratio"=0.8471

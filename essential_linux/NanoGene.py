@@ -17,7 +17,8 @@ from scipy.spatial import cKDTree
 import os
 import toml
 from time import time
-
+import warnings
+warnings.filterwarnings("error")
 
 def fccbasis(a):
     fcc = [
@@ -149,16 +150,16 @@ def particles_encode_gen(lc, lattice_big, num_atoms=None, max_num_atoms=None):
     # print(f"length={np.mean(lattice_big,axis=0)}")
     # times=random.randint(1,3)
     # the extreme case is that the particle has only one layer of unit cells, which has the dimension: np.sqrt(n_max**3)*np.sqrt(n_max**3)*1
-    n1 = random.randint(1, np.floor(np.sqrt(n_max**3)))
-    n2 = random.randint(1, np.floor(np.sqrt(n_max**3)))
-    n3 = random.randint(1, np.floor(np.sqrt(n_max**3)))
+    n1 = random.randint(1, np.int32(np.floor(np.sqrt(n_max**3))))
+    n2 = random.randint(1, np.int32(np.floor(np.sqrt(n_max**3))))
+    n3 = random.randint(1, np.int32(np.floor(np.sqrt(n_max**3))))
     lattice = empty_lattice(lc, n1, n2, n3, lattice_big)
     num_points = len(lattice)
     # this is too strong
     while num_points < num_atoms * 2 or n1 * n2 * n3 > n_max**3:
-        n1 = random.randint(1, np.floor(np.sqrt(n_max**3)))
-        n2 = random.randint(1, np.floor(np.sqrt(n_max**3)))
-        n3 = random.randint(1, np.floor(np.sqrt(n_max**3)))
+        n1 = random.randint(1, np.int32(np.floor(np.sqrt(n_max**3))))
+        n2 = random.randint(1, np.int32(np.floor(np.sqrt(n_max**3))))
+        n3 = random.randint(1, np.int32(np.floor(np.sqrt(n_max**3))))
         lattice = empty_lattice(lc, n1, n2, n3, lattice_big)
         num_points = len(lattice)
     lattice = lattice[:num_atoms]
@@ -191,9 +192,17 @@ def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weig
     if weight==None:
         weight=np.array([1]*len(descriptors.keys()))
     atom = Atoms(positions=particle, symbols=["Pt"] * len(particle))
-    cluster_descriptors = descriptor_table(
-        atom, all=False, descriptors=list(descriptors.keys()) + ["oblateness_moment"]
-    )
+    try:
+        if "oblateness_moment" not in descriptors.keys():
+            cluster_descriptors = descriptor_table(
+            atom, all=False, descriptors=list(descriptors.keys()) + ["oblateness_moment"]
+            )
+        else:
+            cluster_descriptors = descriptor_table(
+                atom,all=False,descriptors=list(descriptors.keys())
+            )
+    except RuntimeWarning:
+        print(f"calculate descriptor: {atom.get_positions()}")
     true_dis = []
     for k in descriptors.keys():
         if k != "ellipsoid":
@@ -204,9 +213,12 @@ def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weig
             true_dis.append(descriptors[k][2])
     true_dis = np.array(true_dis)
     # print(true_dis)
-    pred_dis = np.array(
-        [cluster_descriptors[k] for k in list(cluster_descriptors.keys())[:-1]]
-    )
+    if "oblateness_moment" not in descriptors.keys():
+        pred_dis = np.array(
+            [cluster_descriptors[k] for k in list(cluster_descriptors.keys())[:-1]]
+        )
+    else:
+        pred_dis=np.array([cluster_descriptors[k] for k in list(cluster_descriptors.keys())])
     # print(pred_dis)
     # MSE
     # np.sum((true_dis-pred_dis)**2)
@@ -339,6 +351,12 @@ def atom_trancate_center(particle, theta, phi):
             >= 0
         ):
             trancate_particle.append([pos[0], pos[1], pos[2]])
+    if len(trancate_particle)<5:
+        trancate_particle=[]
+        for pos in particle:
+                if normal[0]*(pos[0]-center[0])+normal[1]*(pos[1]-center[1])+normal[2]*(pos[2]-center[2])<0:
+                      trancate_particle.append([pos[0],pos[1],pos[2]])
+
 
     # print(f"1={len(genome_recon)}")
     # print(len(particle),len(trancate_particle),len(np.where(np.array(genome_recon)==1)[0]))
@@ -373,15 +391,15 @@ def atom_trancate_arbi(particle, theta, phi):
             normal[0] * (pos[0] - center[0])
             + normal[1] * (pos[1] - center[1])
             + normal[2] * (pos[2] - center[2])
-            >= 0
+            >= 0 and [pos[0], pos[1],pos[2]] not in trancate_particle
         ):
             trancate_particle.append([pos[0], pos[1], pos[2]])
     # print(f"len(trancate_particle)={len(trancate_particle)}")
-    # if len(trancate_particle)<5:
-    #     trancate_particle=[]
-    #     for pos in particle:
-    #         if normal[0]*(pos[0]-center[0])+normal[1]*(pos[1]-center[1])+normal[2]*(pos[2]-center[2])<=0:
-    #             trancate_particle.append([pos[0],pos[1],pos[2]])
+        if len(trancate_particle)<5:
+             trancate_particle=[]
+             for pos in particle:
+                if normal[0]*(pos[0]-center[0])+normal[1]*(pos[1]-center[1])+normal[2]*(pos[2]-center[2])<=0:
+                      trancate_particle.append([pos[0],pos[1],pos[2]])
     # print(f"len(trancate_particle)={len(trancate_particle)}")
     return trancate_particle
 
@@ -511,15 +529,39 @@ def chamfer_distance(point_cloud_A, point_cloud_B):
     return chamfer_dist
 
 
+def is3Ddimension(particle):
+    a=len(np.unique(particle[:,0]))
+    b=len(np.unique(particle[:,1]))
+    c=len(np.unique(particle[:,2]))
+    if a==1 or b==1 or c==1:
+        return False
+    else:
+        return True
+
+
+
 def align_point_clouds_pca(particle1, particle2):
     # align particle1 to particle2
     # Center the point clouds
     source_centered = particle1 - np.mean(particle1, axis=0)
     target_centered = particle2 - np.mean(particle2, axis=0)
 
+
+
+
     # Perform PCA
-    source_pca = PCA(n_components=3).fit(source_centered)
-    target_pca = PCA(n_components=3).fit(target_centered)
+    if is3Ddimension(source_centered) and is3Ddimension(target_centered):
+        try:
+            source_pca = PCA(n_components=3).fit(source_centered)
+        except RuntimeWarning:
+            print(f"align_pca(source):{source_centered}")
+        try:
+            target_pca = PCA(n_components=3).fit(target_centered)
+        except RuntimeWarning:
+            print(f"align_pca(target):{target_centered}")
+    else:
+        return particle1
+
 
     # Align principal components
     R = np.dot(target_pca.components_.T, source_pca.components_)
