@@ -930,7 +930,8 @@ if __name__ == "__main__":
     Atoms_3quarter=[last_atom_list[i] for i in index]
     for i in range(len(Atoms_3quarter)):
         particles_descriptors.append(descriptor_table(Atoms_3quarter[i], all=True))
-
+    np.savetxt("fitness_all.txt",fitness_record)
+    np.savetxt("fitness_last.txt",fitness_values)
     pdes = pd.DataFrame(particles_descriptors)
     pdes.to_csv("descriptors_" + extend + ".csv")
     pdes[ini_configurations["plot_descriptors"]].hist(bins=100)
