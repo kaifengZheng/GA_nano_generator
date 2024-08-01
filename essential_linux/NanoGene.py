@@ -17,8 +17,9 @@ from scipy.spatial import cKDTree
 import os
 import toml
 from time import time
-import warnings
-warnings.filterwarnings("error")
+#import warnings
+import plotly.graph_objects as go
+#warnings.filterwarnings("error")
 
 def fccbasis(a):
     fcc = [
@@ -896,8 +897,24 @@ def genetic_algorithm(
 
     # def genome(num_atoms):
     #     np.randomduplicates exist, then generate a new structure
-
-
+def plot_radar(table,index,descriptors,multiplier,save=False):
+    r=[table.iloc[index][descriptors[i]]*multiplier[i] for i in range(len(descriptors))]
+    fig=go.Figure(data=go.Scatterpolar(
+        r=r,
+        theta=[f"{descriptors[i]}*{multiplier[i]}" for i in range(len(descriptors))],
+        fill='toself'
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True
+        ),
+        ),
+        showlegend=False
+    )
+    #fig.show()
+    if save:
+        fig.write_image(f"radar_{index}.svg",engine="kaleido")
 if __name__ == "__main__":
     ini_configurations=toml.load("config.toml")
 
@@ -921,6 +938,7 @@ if __name__ == "__main__":
 
     particles_descriptors = []
     rankings=ranking_fitness(fitness_values)
+    print()
     index=[]
     for i in range(len(rankings)):
         index.extend(np.where(rankings==i+1)[0])
@@ -937,8 +955,18 @@ if __name__ == "__main__":
     pdes[ini_configurations["plot_descriptors"]].hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis_" + extend + ".png")
-    write("best_" + extend + ".png", last_atom_list[index[0]], rotation="45x,45y,45z")
-    plt.close("all")
+    if len(rankings)>=10:
+        for i in range(len(Atoms_3quarter)):
+            write(f"best_{i}" + extend + ".png", Atoms_3quarter[i], rotation="45x,45y,45z")
+            if ini_configurations['plot_radar_conf']['save']:
+                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']["multiplier"],save=True)
+            plt.close("all")
+    else:
+        for i in range(len(Atoms_3quarter)):
+            for i in range(len(Atoms_3quarter)):
+                write(f"best_{i}"+extend+".png",last_atom_list[i],rotation='45x,45y,45z')
+                if ini_configurations['plot_radar_conf']['save']:
+                    plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
     write_file(last_atom_list, "output_" + extend)
     try:
         draw_ellipsoid(
