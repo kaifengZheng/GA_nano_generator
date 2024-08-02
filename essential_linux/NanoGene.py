@@ -955,22 +955,20 @@ if __name__ == "__main__":
     pdes[ini_configurations["plot_descriptors"]].hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis_" + extend + ".png")
-    if len(rankings)>=10:
+    if len(Atoms_3quarter)<10:
         for i in range(len(Atoms_3quarter)):
-            write(f"best_{i}" + extend + ".png", Atoms_3quarter[i], rotation="45x,45y,45z")
+            write(f"best_{i}"+extend+".png",Atoms_3quarter[i],rotation='45x,45y,45z')
             if ini_configurations['plot_radar_conf']['save']:
-                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']["multiplier"],save=True)
-            plt.close("all")
+                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
     else:
-        for i in range(len(Atoms_3quarter)):
-            for i in range(len(Atoms_3quarter)):
-                write(f"best_{i}"+extend+".png",last_atom_list[i],rotation='45x,45y,45z')
-                if ini_configurations['plot_radar_conf']['save']:
-                    plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
-    write_file(last_atom_list, "output_" + extend)
+        for i in range(10):
+            write(f"best_{i}"+extend+".png",Atoms_3quarter[i],rotation='45x,45y,45z')
+            if ini_configurations['plot_radar_conf']['save']:
+                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
+    write_file(Atoms_3quarter, "output_" + extend)
     try:
         draw_ellipsoid(
-            best_particle[-1], save=True, filename="ellipsoid_" + extend + ".png"
+            Atoms_3quarter[0], save=True, filename="ellipsoid_" + extend + ".png"
         )
     except:
         pass
