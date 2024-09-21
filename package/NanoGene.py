@@ -27,16 +27,6 @@ def fccbasis(a):
         [0.5 * a, 0, 0.5 * a],
         [0.5 * a, 0.5 * a, 0],
         [0, 0, 0],
-        [0, 0, a],
-        [0, a, 0],
-        [a, 0, 0],
-        [a, a, 0],
-        [0, a, a],
-        [a, 0, a],
-        [a, a, a],
-        [a, 0.5 * a, 0.5 * a],
-        [0.5 * a, a, 0.5 * a],
-        [0.5 * a, 0.5 * a, a],
     ]
     return np.array(fcc)
 
@@ -124,7 +114,7 @@ def particles_encode_gen_no_oblate(lc, lattice_big, num_atoms=None, max_num_atom
         ), "Please provide the maximum number of atoms in the lattice."
         num_atoms = random.randint(12, max_num_atoms)
     # min_num_points=num_atoms
-    num_lattice = max_num_atoms // 2
+    num_lattice = max_num_atoms #//2
     n_max = int(np.ceil(np.cbrt(num_lattice)))
     num_points = 0
     # transfer points to the big lattice
@@ -144,7 +134,7 @@ def particles_encode_gen(lc, lattice_big, num_atoms=None, max_num_atoms=None):
     if num_atoms == None:
         # assert max_num_atoms!=None,"Please provide the maximum number of atoms in the lattice."
         num_atoms = random.randint(12, max_num_atoms)
-    num_lattice = max_num_atoms // 2
+    num_lattice = max_num_atoms #// 2
     n_max = int(np.ceil(np.cbrt(num_lattice)))
     # min_num_points=num_atoms
 
