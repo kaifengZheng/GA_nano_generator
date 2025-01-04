@@ -14,6 +14,7 @@ Source: "dist\NanoGene\config.toml"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Include the entire folder and its contents
 Source: "dist\NanoGene\_internal\*"; DestDir: "{app}\_internal"; Flags: recursesubdirs createallsubdirs
+Source: "example\*"; DestDir: "{app}\example"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\NanoGene"; Filename: "{app}\NanoGene.exe";IconFilename: "{app}\icon\My.ico"
