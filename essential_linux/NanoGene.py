@@ -649,6 +649,7 @@ def genetic_algorithm(
     cross_over_rate=0.3,
     elite_fraction=0.05,
     initial_crowding_distance=0.1,
+    percentage=0.75,
     niche_radius=0.1,
     alpha=1,
     initial_mutation_rate=1,
@@ -831,7 +832,7 @@ def genetic_algorithm(
         fitness_value_sort = sorted(fitness_values)
         quater_fitness_index = np.where(
             np.array(fitness_values)
-            <= fitness_value_sort[int(len(fitness_values) * 0.75)]
+            <= fitness_value_sort[int(len(fitness_values) * percentage)-1]
         )[0][0]
         predict_quater = predict_values[quater_fitness_index]
 
@@ -850,7 +851,7 @@ def genetic_algorithm(
         # print(mutation_rate)
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={predict_quater} time_cost={time_cost}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_{percentage}={predict_quater} time_cost={time_cost}"
         )
 
         # [6]. early stopping
@@ -915,6 +916,7 @@ if __name__ == "__main__":
         lc=ini_configurations["lc"],
         niche_radius=ini_configurations["niche_radius"],
         alpha=ini_configurations["alpha"],
+        percentage=ini_configurations["save_config"]["percentage"],
         initial_mutation_rate=ini_configurations["initial_mutation_rate"],
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
         weight=ini_configurations["fitness_weight"],
@@ -932,7 +934,7 @@ if __name__ == "__main__":
     index=[]
     for i in range(len(rankings)):
         index.extend(np.where(rankings==i+1)[0])
-        if len(index)>=len(rankings)*3//4: # 3/4 of the good solutions
+        if len(index)>=len(rankings)*ini_configurations["save_config"]["percentage"]: # 3/4 of the good solutions
             break
     extend = ini_configurations["sample_name"]
     Atoms_3quarter=[last_atom_list[i] for i in index]
