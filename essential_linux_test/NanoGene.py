@@ -666,8 +666,8 @@ def genetic_algorithm(
     # 1. set up parameters
 
     print(descriptors)
-    num_lattice = max_num_atoms // 2  # since one unit cell of fcc lattice has 2 atoms
-    n_max = int(np.ceil(np.cbrt(num_lattice)))
+    num_lattice = max_num_atoms  # number of lattice on each direction equals cube root of the maximum number of atoms minus 1(\cbrt(max_num_atoms)-1)
+    n_max = int(np.ceil(np.cbrt(num_lattice)))-1
     lattice_big = extendfcc(
         fccbasis(lc),
         lc,
