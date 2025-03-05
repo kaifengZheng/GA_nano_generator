@@ -4,3 +4,6 @@
 [submodule "essential_linux_test/shape_proj_util"]
 	path = essential_linux_test/shape_proj_util
 	url = https://github.com/kaifengZheng/shape_proj_util.git
+[submodule "essential_linux_v2/shape_proj_util"]
+	path = essential_linux_v2/shape_proj_util
+	url = https://github.com/kaifengZheng/shape_proj_util.git
