@@ -1,0 +1,1 @@
+{"max_num_atoms": 300, "generations": 25, "population_size": 100, "num_steps": 100, "lc": 3.924, "cross_over_rate": 0.6, "elite_fraction": 0.05, "initial_crowding_distance": 1, "niche_radius": 1, "alpha": 1, "initial_mutation_rate": 0.2, "mutation_rate_decay": 0.94, "fitness_func": "L2", "reduction": "sum", "weight": 
