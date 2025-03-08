@@ -57,7 +57,7 @@ def extendfcc(lattice, a, x, y, z):
     return np.array(lattice_extend)
 
 
-def empty_lattice(lc, n1, n2, n3, lattice_big):
+def empty_lattice(lc, n1, n2, n3):
     """
     Generate a fcc lattice by given lattice constant and superlattice parameters: n1,n2,n3.
     The constructed lattice is centered at (0,0,0), and the coordinates are reordered by the
@@ -659,6 +659,7 @@ def genetic_algorithm(
     max_num_atoms=200,
     generations=40,
     population_size=100,
+    percentage=0.75,
     num_steps=100,
     lc=3.924,
     cross_over_rate=0.3,
@@ -873,7 +874,7 @@ if __name__ == "__main__":
         initial_mutation_rate=ini_configurations["initial_mutation_rate"],
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
         weight=ini_configurations["fitness_weight"],
-        share=ini_configurations["share"]
+        share=ini_configurations["share"],
         initial_crowding_distance=ini_configurations["initial_crowding_distance"],
         cross_over_rate=ini_configurations["cross_over_rate"],
         elite_fraction=ini_configurations["elite_fraction"],
