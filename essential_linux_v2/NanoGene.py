@@ -117,8 +117,8 @@ def particles_encode_gen(lc, num_atoms=None, max_num_atoms=None,record_lattice=[
     # print(f"length={np.mean(lattice_big,axis=0)}")
     # times=random.randint(1,3)
     # the extreme case is that the particle has only one layer of unit cells, which has the dimension: np.sqrt(n_max**3)*np.sqrt(n_max**3)*1
-    n1 = random.randint(2, int(np.sqrt(num_lattice)))
-    n2 = random.randint(2, int(np.sqrt(num_lattice)))
+    n1 = random.randint(1, int(np.sqrt(num_lattice)))
+    n2 = random.randint(1, int(np.sqrt(num_lattice)))
     n3 = random.randint(1, int(np.sqrt(num_lattice)))
     # n3 = random.randint(1, int(np.sqrt(num_lattice)))
     # n1 = random.randint(n3, int(np.sqrt(num_lattice)))
@@ -287,7 +287,7 @@ def atom_cut_up_down_center(particle, theta, phi,center_method="mean"):
     particle = np.array(particle)
     if num_atoms < 5:
         print("Warning particle is less than 5 atoms")
-        return particle, particle
+        return particle, []
 
     particle = np.array(particle)
     
@@ -383,6 +383,20 @@ def crossover(lc, parent1, parent2, cross_over_rate=0.6,center_method="mean"):
         return parent1, parent2
 
 
+def shift_particles(particle1,particle2,lc):
+        dist=cdist(particle1,particle2)
+        short=np.min(dist,axis=1)
+        index_A=np.where(short==np.min(short))[0][0]
+        index_B=np.where(dist[index_A]==np.min(short))[0][0]
+        # print(f"short={np.min(dist)}")
+
+        if np.min(dist)<=lc/2:
+               shift_A=particle1
+        else:
+               diffB_to_A=particle2[index_B]-particle1[index_A]
+               shift_A=particle1+diffB_to_A
+        return shift_A,particle2
+
 def mutation(particle, lc, max_num_atoms, mutation_rate=0.3):
     mr = random.uniform(0, 1)
     # if mr <= mutation_rate/3:  # / 2:
@@ -417,9 +431,8 @@ def mutation(particle, lc, max_num_atoms, mutation_rate=0.3):
 
     else:
         particle_update = particle
-    
-    return particle_update
 
+    return particle_update
 
 def convex_particle(particle, lattice_big, lc):
     indices = []
@@ -442,7 +455,7 @@ def is_point_in_hull(point, hull, lc):
     equations = hull.equations
     # print(np.all(np.dot(equations[:,:-1],point)+equations[:,-1]<=0))
     return np.all(
-        np.dot(equations[:, :-1], point) + equations[:, -1] <= lc / (2 * np.sqrt(2))
+        np.dot(equations[:, :-1], point) + equations[:, -1] <= 1
     )
 
 
@@ -516,12 +529,15 @@ def align_point_clouds_pca(particle1, particle2):
     return aligned_source
 
 
+
 def sharing_function(ind1, ind2, niche_radius, alpha):
     distance = calculate_similarity(ind1, ind2, niche_radius)
     if distance < niche_radius:
         return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
     else:
-        return 1 #+ (niche_radius/distance)**alpha  # return 0.0 to avoid division by zero in shared_fitness_value
+        return 1e-8 #+ (niche_radius/distance)**alpha  # return 0.0 to avoid division by zero in shared_fitness_value
+
+
 
 def calculate_similarity(ind1, ind2, crowding_distance=0.1):
     # atoms1 = Atoms(positions=ind1, symbols=["Pt"] * len(ind1))
@@ -537,10 +553,9 @@ def calculate_similarity(ind1, ind2, crowding_distance=0.1):
 
     return dist / crowding_distance
 
-
 def shared_fitness_value(individual, descriptor, population, niche_radius, alpha,fitness_func,reduction,weight):
     fitnessvalue, predict_value = fitness(individual, descriptor,fitness_func,reduction,weight)
-    sharing_sum = np.mean(
+    sharing_sum = np.sum(
         [sharing_function(individual, other, niche_radius, alpha) for other in population if not np.array_equal(individual, other)] # avoid self-comparison
     )
     # print(sharing_sum)
@@ -549,7 +564,7 @@ def shared_fitness_value(individual, descriptor, population, niche_radius, alpha
 
 
 def fitness_sharing(population, descriptor, niche_radius, alpha,fitness_func="L1",share=False,reduction="sum",weight=None):
-    
+
     shared_fitness = []
     predict_values = []
     for individual in population:
@@ -567,7 +582,7 @@ def crowding(parent1,parent2,child1,child2,population,descriptors,fitness_func,r
     # print(f"parent2={parent2}")
     # print(f"child1={child1}")
     # print(f"child2={child2}")
-    pc11 = calculate_similarity(parent1, child1, crowding_distance) 
+    pc11 = calculate_similarity(parent1, child1, crowding_distance)
     pc22 = calculate_similarity(parent2, child2, crowding_distance)
     pc12 = calculate_similarity(parent1, child2, crowding_distance)
     pc21 = calculate_similarity(parent2, child1, crowding_distance)
@@ -640,22 +655,21 @@ def draw_ellipsoid(atoms, save=False, filename="ellipsoid.png"):
     ax.scatter(position[:, 0], position[:, 1], position[:, 2], color="red")
     fig.savefig(filename)
 
-
 def genetic_algorithm(
     max_num_atoms=200,
     generations=40,
-    num_steps=100,
     population_size=100,
-    lc=3.77,
+    num_steps=100,
+    lc=3.924,
     cross_over_rate=0.3,
     elite_fraction=0.05,
     initial_crowding_distance=0.1,
-    percentage=0.75,
     niche_radius=0.1,
     alpha=1,
     initial_mutation_rate=1,
     mutation_rate_decay=0.9,
     weight=None,
+    share=False,
     fitness_func="L1",
     reduction="sum",
     descriptors={"oblateness_moment": 1, "atom_number": 55}
@@ -664,6 +678,7 @@ def genetic_algorithm(
     # "CN3":2,
     # "CN4":5
 ):
+
     # 1. set up parameters
 
     print(descriptors)
@@ -695,10 +710,14 @@ def genetic_algorithm(
     time_cost_record=[]
     # best_particle = []
     # 3. calculate fitness for populations
-    fitness_values = fitness_sharing(populations, descriptors, niche_radius, alpha,fitness_func=fitness_func,reduction=reduction,weight=weight)[0]
+    fitness_values = fitness_sharing(populations, descriptors, niche_radius, alpha,fitness_func=fitness_func,reduction=reduction,weight=weight,share=share)[0]
     print(f"initial population={len(populations)}")
     print(f"fit_property={descriptors}")
-    print(f"fitness_func={fitness_func}   reduction={reduction}   weight={weight}")
+    if share==False:
+        print(f"fitness_func={fitness_func}   reduction={reduction}   weight={weight}")
+    else:
+        print(f"fitness_func={fitness_func}_share_on   reduction={reduction}   weight={weight}")
+
     # print(len(fitness_values),len(populations))
     # 4. start iteration
     for generation in (pbar := tqdm(range(generations))):
@@ -854,6 +873,7 @@ if __name__ == "__main__":
         initial_mutation_rate=ini_configurations["initial_mutation_rate"],
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
         weight=ini_configurations["fitness_weight"],
+        share=ini_configurations["share"]
         initial_crowding_distance=ini_configurations["initial_crowding_distance"],
         cross_over_rate=ini_configurations["cross_over_rate"],
         elite_fraction=ini_configurations["elite_fraction"],
