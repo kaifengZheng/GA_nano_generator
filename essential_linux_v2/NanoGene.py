@@ -111,14 +111,14 @@ def particles_encode_gen(lc, num_atoms=None, max_num_atoms=None,record_lattice=[
     if num_atoms == None:
         # assert max_num_atoms!=None,"Please provide the maximum number of atoms in the lattice."
         num_atoms = random.randint(12, max_num_atoms)
-    num_lattice = max_num_atoms//4 #// 2
+    num_lattice = max_num_atoms//2 #// 2
     # min_num_points=num_atoms
 
     # print(f"length={np.mean(lattice_big,axis=0)}")
     # times=random.randint(1,3)
     # the extreme case is that the particle has only one layer of unit cells, which has the dimension: np.sqrt(n_max**3)*np.sqrt(n_max**3)*1
-    n1 = random.randint(1, int(np.sqrt(num_lattice)))
-    n2 = random.randint(1, int(np.sqrt(num_lattice)))
+    n1 = random.randint(2, int(np.sqrt(num_lattice)))
+    n2 = random.randint(2, int(np.sqrt(num_lattice)))
     n3 = random.randint(1, int(np.sqrt(num_lattice)))
     # n3 = random.randint(1, int(np.sqrt(num_lattice)))
     # n1 = random.randint(n3, int(np.sqrt(num_lattice)))
@@ -131,8 +131,8 @@ def particles_encode_gen(lc, num_atoms=None, max_num_atoms=None,record_lattice=[
         if num_atoms == None:
             # assert max_num_atoms!=None,"Please provide the maximum number of atoms in the lattice."
             num_atoms = random.randint(12, max_num_atoms)
-        n1 = random.randint(1, int(np.sqrt(num_lattice)))
-        n2 = random.randint(1, int(np.sqrt(num_lattice)))
+        n1 = random.randint(2, int(np.sqrt(num_lattice)))
+        n2 = random.randint(2, int(np.sqrt(num_lattice)))
         n3 = random.randint(1, int(np.sqrt(num_lattice)))
         # n3 = random.randint(1, int(np.sqrt(num_lattice)))
         # n1 = random.randint(n3, int(np.sqrt(num_lattice)))
@@ -151,7 +151,6 @@ def ini_population(
     lc, population_size, num_atoms=None, max_num_atoms=None,lc_record=[]
 ):
     generations = []
-    n = 0
     for i in range(population_size):
         particle,lc_record = particles_encode_gen(
             lc,
@@ -287,7 +286,7 @@ def atom_cut_up_down_center(particle, theta, phi,center_method="mean"):
     particle = np.array(particle)
     if num_atoms < 5:
         print("Warning particle is less than 5 atoms")
-        return particle, []
+        return particle, particle
 
     particle = np.array(particle)
     
@@ -371,13 +370,10 @@ def crossover(lc, parent1, parent2, cross_over_rate=0.6,center_method="mean"):
             parent2_up, parent2_down = atom_cut_up_down_center(parent2, theta, phi, lc,center_method=center_method)
         except:
             return parent1, parent2
-        dist=np.sort(cdist(parent1_up,parent2_down))
         parent1 = np.vstack((parent1_up, parent2_down))
         parent2 = np.vstack((parent1_down, parent2_up))
         parent1 = remove_duplicates(parent1, lc)
         parent2 = remove_duplicates(parent2, lc)
-        # print(parent1_up,parent2_down)
-        # print(parent1_down,parent2_up)
         return parent1, parent2
     else:
         return parent1, parent2
@@ -399,18 +395,6 @@ def shift_particles(particle1,particle2,lc):
 
 def mutation(particle, lc, max_num_atoms, mutation_rate=0.3):
     mr = random.uniform(0, 1)
-    # if mr <= mutation_rate/3:  # / 2:
-    #     # renum = 0
-    #     # theta = random.uniform(0, np.pi)
-    #     # phi = random.uniform(0, 2 * np.pi)
-    #     # particle_update = atom_trancate_center(particle, theta, phi)
-    #     # while len(particle_update) < 5 and renum < 5:
-    #     #     theta = random.uniform(0, np.pi)
-    #     #     phi = random.uniform(0, 2 * np.pi)
-    #     #     # if renum==0:
-    #     #     #     print("no good 1")
-    #     #     particle_update = atom_trancate_center(particle, theta, phi)
-    #     #     renum += 1
     if mr <= mutation_rate * 3 / 4:  # and mr <= mutation_rate * 2 / 3:
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
@@ -455,7 +439,7 @@ def is_point_in_hull(point, hull, lc):
     equations = hull.equations
     # print(np.all(np.dot(equations[:,:-1],point)+equations[:,-1]<=0))
     return np.all(
-        np.dot(equations[:, :-1], point) + equations[:, -1] <= 1
+        np.dot(equations[:, :-1], point) + equations[:, -1] <= lc/np.sqrt(2)
     )
 
 
@@ -531,7 +515,7 @@ def align_point_clouds_pca(particle1, particle2):
 
 
 def sharing_function(ind1, ind2, niche_radius, alpha):
-    distance = calculate_similarity(ind1, ind2, niche_radius)
+    distance = calculate_similarity(ind1, ind2)
     if distance < niche_radius:
         return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
     else:
@@ -539,7 +523,7 @@ def sharing_function(ind1, ind2, niche_radius, alpha):
 
 
 
-def calculate_similarity(ind1, ind2, crowding_distance=0.1):
+def calculate_similarity(ind1, ind2):
     # atoms1 = Atoms(positions=ind1, symbols=["Pt"] * len(ind1))
     # atoms2 = Atoms(positions=in2, symbols=["Pt"] * len(in2))
     # des_atoms1 = descriptor_table(atoms1)
@@ -551,7 +535,7 @@ def calculate_similarity(ind1, ind2, crowding_distance=0.1):
     dist = chamfer_distance(ind1, ind2)
     # print(dist)
 
-    return dist / crowding_distance
+    return dist
 
 def shared_fitness_value(individual, descriptor, population, niche_radius, alpha,fitness_func,reduction,weight):
     fitnessvalue, predict_value = fitness(individual, descriptor,fitness_func,reduction,weight)
@@ -577,16 +561,17 @@ def fitness_sharing(population, descriptor, niche_radius, alpha,fitness_func="L1
         shared_fitness.append(fitness_value)
         predict_values.append(predict_value)
     return shared_fitness, predict_values
-def crowding(parent1,parent2,child1,child2,population,descriptors,fitness_func,reduction,crowding_distance=0.1,niche_radius=0.1,alpha=1,weight=None,share=False):
+def crowding(parent1,parent2,child1,child2,population,descriptors,fitness_func,reduction,niche_radius=0.1,alpha=1,weight=None,share=False):
     # print(f"parent1={parent1}")
     # print(f"parent2={parent2}")
     # print(f"child1={child1}")
     # print(f"child2={child2}")
-    pc11 = calculate_similarity(parent1, child1, crowding_distance)
-    pc22 = calculate_similarity(parent2, child2, crowding_distance)
-    pc12 = calculate_similarity(parent1, child2, crowding_distance)
-    pc21 = calculate_similarity(parent2, child1, crowding_distance)
+    pc11 = calculate_similarity(parent1, child1)
+    pc22 = calculate_similarity(parent2, child2)
+    pc12 = calculate_similarity(parent1, child2)
+    pc21 = calculate_similarity(parent2, child1)
     if share==True:
+
         fitp1,_=shared_fitness_value(parent1, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
         fitp2,_=shared_fitness_value(parent2, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
         fitch1,_=shared_fitness_value(child1, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
@@ -664,7 +649,6 @@ def genetic_algorithm(
     lc=3.924,
     cross_over_rate=0.3,
     elite_fraction=0.05,
-    initial_crowding_distance=0.1,
     niche_radius=0.1,
     alpha=1,
     initial_mutation_rate=1,
@@ -712,6 +696,8 @@ def genetic_algorithm(
     # best_particle = []
     # 3. calculate fitness for populations
     fitness_values = fitness_sharing(populations, descriptors, niche_radius, alpha,fitness_func=fitness_func,reduction=reduction,weight=weight,share=share)[0]
+
+
     print(f"initial population={len(populations)}")
     print(f"fit_property={descriptors}")
     if share==False:
@@ -737,10 +723,8 @@ def genetic_algorithm(
         elites = sorted_population[:num_elites]
         # check duplicates, if duplicates exist, then generate a new structure
         elites_index=np.unique(np.array([find_index_2d(populations,elites[i]) for i in range(len(elites))]))
-        num_residual = population_size - len(elites_index)
         populations_residual=[populations[i] for i in range(len(populations)) if i not in elites_index]
         fitness_values_residual=[fitness_values[i] for i in range(len(fitness_values)) if i not in elites_index]
-        num = 0
         for i in (pbar:=tqdm(range(num_steps))):
             # [1]. find parents from populations based on fitness values
             # print(len(populations),len(parameters),len(fitness_values))
@@ -754,7 +738,7 @@ def genetic_algorithm(
             # fit_parent2=fitness(parent2,lc,max_num_atoms,descriptors)
             # [2]. crossover and mutation to generate offsprings
             children1, children2 = crossover(
-                lc, parent1, parent2,cross_over_rate=cross_over_rate
+                lc, parent1, parent2,cross_over_rate=cross_over_rate,center_method="random"
             )
 
 
@@ -773,8 +757,7 @@ def genetic_algorithm(
                                             child1=children1,child2=children2,
                                             population=populations,descriptors=descriptors,
                                             fitness_func=fitness_func,reduction=reduction,
-                                            crowding_distance=initial_crowding_distance,
-                                            niche_radius=niche_radius,alpha=alpha,weight=weight)
+                                            niche_radius=niche_radius,alpha=alpha,weight=weight,share=share)
             populations[index1] = children1
             populations[index2] = children2
 
@@ -782,8 +765,9 @@ def genetic_algorithm(
         fitness_values = []
         predict_values = []
         fitness_values, predict_values = fitness_sharing(
-            populations, descriptors, initial_crowding_distance, alpha,fitness_func,reduction
+            populations, descriptors, niche_radius=niche_radius,alpha=alpha,fitness_func=fitness_func,share=share,reduction=reduction,weight=weight
         )
+
         best_fitness = min(fitness_values)
         ave_fitness = np.mean(fitness_values)
         # std_fitness = np.std(fitness_values)
@@ -791,7 +775,7 @@ def genetic_algorithm(
         fitness_value_sort = sorted(fitness_values)
         quater_fitness_index = np.where(
             np.array(fitness_values)
-            <= fitness_value_sort[int(len(fitness_values) * 0.75)]
+            <= fitness_value_sort[int(len(fitness_values) * percentage)]
         )[0][0]
         predict_quater = predict_values[quater_fitness_index]
 
@@ -804,7 +788,7 @@ def genetic_algorithm(
         # print(mutation_rate)
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={percentage}={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),5)}+/-{np.round(np.std(fitness_values),5)} Predict_{percentage}={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
         )
 
         # [6]. early stopping
@@ -875,7 +859,6 @@ if __name__ == "__main__":
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
         weight=ini_configurations["fitness_weight"],
         share=ini_configurations["share"],
-        initial_crowding_distance=ini_configurations["initial_crowding_distance"],
         cross_over_rate=ini_configurations["cross_over_rate"],
         elite_fraction=ini_configurations["elite_fraction"],
         fitness_func=ini_configurations["fitness_func"],
