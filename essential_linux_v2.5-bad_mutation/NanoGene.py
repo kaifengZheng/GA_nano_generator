@@ -521,7 +521,7 @@ def align_point_clouds_pca(particle1, particle2):
 
 
 def sharing_function(ind1, ind2, niche_radius, alpha):
-    distance = calculate_similarity(ind1, ind2)
+    distance = calculate_similarity(ind1, ind2, niche_radius)
     if distance < niche_radius:
         return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
     else:
@@ -792,7 +792,7 @@ def genetic_algorithm(
         # print(mutation_rate)
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_v),3)}+/-{np.round(np.std(fitness_v),3)} Predict_Q3={percentage}={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_v),3)}+/-{np.round(np.std(fitness_v),3)} Predict_Q3={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
         )
 
         # [6]. early stopping
