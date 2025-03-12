@@ -1,22 +1,23 @@
 sample_name="S1"
 max_num_atoms=200
-generations=150
+generations=50
 population_size=300
+num_steps=100
 lc=3.924
 cross_over_rate=0.6
 elite_fraction=0.01
 fitness_weight=[1.0,1.0]
-initial_crowding_distance=0.1
 niche_radius=0.1
 alpha=1
+share=false
 initial_mutation_rate=1
 mutation_rate_decay=0.999
 fitness_func="RAE" #RAE, L1,L2
 reduction="max"   #mean max sum
 plot_descriptors=["CN1","CN2","CN3","CN4","GCN1","oblateness_moment","atom_number","diameter_2radius","SVR_CN","surface_CN","surface_GCN"]
 [descriptors]
-atom_number=109
-SVR_CN=0.77
+atom_number=127
+SVR_CN=0.74
 #S3
 #"diameter_2radius"=18.255
 #"SVR_CN"=0.671
