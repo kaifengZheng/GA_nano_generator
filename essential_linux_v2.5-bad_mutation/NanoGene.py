@@ -398,7 +398,7 @@ def mutation(particle, lc, max_num_atoms, mutation_rate=0.3):
     #     #     #     print("no good 1")
     #     #     particle_update = atom_trancate_center(particle, theta, phi)
     #     #     renum += 1
-    if mr <= mutation_rate * 3 / 4 and len(particle)>12:  # and mr <= mutation_rate * 2 / 3:
+    if mr <= mutation_rate * 3 / 4 and len(particle)>13:  # and mr <= mutation_rate * 2 / 3:
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
         particle_update1,particle_update2  = atom_cut_up_down_center(particle, theta, phi,center_method="random")
@@ -521,7 +521,7 @@ def align_point_clouds_pca(particle1, particle2):
 
 
 def sharing_function(ind1, ind2, niche_radius, alpha):
-    distance = calculate_similarity(ind1, ind2, niche_radius)
+    distance = calculate_similarity(ind1, ind2)
     if distance < niche_radius:
         return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
     else:
@@ -726,6 +726,7 @@ def genetic_algorithm(
         elites_index=np.unique(np.array([find_index_2d(populations,elites[i]) for i in range(len(elites))]))
         populations_residual=[populations[i] for i in range(len(populations)) if i not in elites_index]
         fitness_values_residual=[fitness_values[i] for i in range(len(fitness_values)) if i not in elites_index]
+        num = 0
         for i in (pbar:=tqdm(range(num_steps))):
             # [1]. find parents from populations based on fitness values
             # print(len(populations),len(parameters),len(fitness_values))
@@ -792,7 +793,7 @@ def genetic_algorithm(
         # print(mutation_rate)
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_v),3)}+/-{np.round(np.std(fitness_v),3)} Predict_Q3={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_v),3)}+/-{np.round(np.std(fitness_v),3)} Predict_Q3={percentage}={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
         )
 
         # [6]. early stopping
