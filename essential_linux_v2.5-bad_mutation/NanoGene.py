@@ -521,7 +521,7 @@ def align_point_clouds_pca(particle1, particle2):
 
 
 def sharing_function(ind1, ind2, niche_radius, alpha):
-    distance = calculate_similarity(ind1, ind2, niche_radius)
+    distance = calculate_similarity(ind1, ind2)
     if distance < niche_radius:
         return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
     else:
