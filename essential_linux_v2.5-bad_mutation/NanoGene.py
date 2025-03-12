@@ -57,7 +57,7 @@ def extendfcc(lattice, a, x, y, z):
     return np.array(lattice_extend)
 
 
-def empty_lattice(lc, n1, n2, n3, lattice_big):
+def empty_lattice(lc, n1, n2, n3):
     """
     Generate a fcc lattice by given lattice constant and superlattice parameters: n1,n2,n3.
     The constructed lattice is centered at (0,0,0), and the coordinates are reordered by the
@@ -398,7 +398,7 @@ def mutation(particle, lc, max_num_atoms, mutation_rate=0.3):
     #     #     #     print("no good 1")
     #     #     particle_update = atom_trancate_center(particle, theta, phi)
     #     #     renum += 1
-    if mr <= mutation_rate * 3 / 4 and len(particle)>13:  # and mr <= mutation_rate * 2 / 3:
+    if mr <= mutation_rate * 3 / 4 and len(particle)>12:  # and mr <= mutation_rate * 2 / 3:
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
         particle_update1,particle_update2  = atom_cut_up_down_center(particle, theta, phi,center_method="random")
@@ -525,7 +525,7 @@ def sharing_function(ind1, ind2, niche_radius, alpha):
     if distance < niche_radius:
         return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
     else:
-        return 1 #+ (niche_radius/distance)**alpha  # return 0.0 to avoid division by zero in shared_fitness_value
+        return 1e-8 #+ (niche_radius/distance)**alpha  # return 0.0 to avoid division by zero in shared_fitness_value
 
 def calculate_similarity(ind1, ind2):
     # atoms1 = Atoms(positions=ind1, symbols=["Pt"] * len(ind1))
@@ -726,7 +726,6 @@ def genetic_algorithm(
         elites_index=np.unique(np.array([find_index_2d(populations,elites[i]) for i in range(len(elites))]))
         populations_residual=[populations[i] for i in range(len(populations)) if i not in elites_index]
         fitness_values_residual=[fitness_values[i] for i in range(len(fitness_values)) if i not in elites_index]
-        num = 0
         for i in (pbar:=tqdm(range(num_steps))):
             # [1]. find parents from populations based on fitness values
             # print(len(populations),len(parameters),len(fitness_values))
