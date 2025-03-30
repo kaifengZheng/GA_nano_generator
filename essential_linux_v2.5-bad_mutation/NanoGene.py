@@ -513,12 +513,6 @@ def align_point_clouds_pca(particle1, particle2):
     return aligned_source
 
 
-    # Align principal components
-    R = np.dot(target_pca.components_.T, source_pca.components_)
-    aligned_source = np.dot(source_centered, R.T) + np.mean(particle2, axis=0)
-
-    return aligned_source
-
 
 def sharing_function(ind1, ind2, niche_radius, alpha):
     distance = calculate_similarity(ind1, ind2)
