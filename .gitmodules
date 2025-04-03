@@ -10,3 +10,6 @@
 [submodule "essential_linux_v2.5-bad_mutation/shape_proj_util"]
 	path = essential_linux_v2.5-bad_mutation/shape_proj_util
 	url = https://github.com/kaifengZheng/shape_proj_util.git
+[submodule "essential_linux_v3.0-accelerate-gaussian/shape_proj_util.git"]
+        path = essential_linux_v3.0-accelerate-gaussian/shape_proj_util
+	url = https://github.com/kaifengZheng/shape_proj_util.git
