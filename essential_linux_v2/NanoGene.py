@@ -600,19 +600,19 @@ def write_file(Atoms_list, foldername):
     for atoms in Atoms_list:
         write(f"{foldername}/individual_{n}.xyz", atoms, format="xyz")
         n += 1
-def find_index_2d(array_2d, array_1d):
+def find_index_2d(array_2d, array_search):
     """
     Finds the index of a 1D array within a 2D NumPy array.
 
     Args:
-        array_2d: A 2D NumPy array.
-        array_1d: A 1D NumPy array to search for.
+        Array_2d: A list of 2D-array.
+        array_search: A specific array to search for.
 
     Returns:
         The index of the first occurrence of array_1d in array_2d, or -1 if not found.
     """
     for i, row in enumerate(array_2d):
-        if np.array_equal(row, array_1d):
+        if np.array_equal(row, array_search):
             return i
     return -1
 
