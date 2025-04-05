@@ -210,7 +210,7 @@ def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weig
         sim= 1-np.exp(-((true_dis - pred_dis) ** 2) / (2 * (tolerances ** 2)))
     else:
         diff=np.abs(true_dis - pred_dis)
-        sim = np.where(diff <= tolerances, 0, diff - tolerances)  # soft penalty for L1 and L2
+        sim = np.where(diff <= tolerances, 0,100*diff)  # soft penalty for L1 and L2 for L1 and L2
         if fitness_func=="L1":
             sim = np.abs(sim)
         elif fitness_func=="L2":
@@ -572,7 +572,7 @@ def shared_fitness_value(individual, descriptor, population, niche_radius, fitne
         [sharing_function(individual, other, niche_radius) for other in population if not np.array_equal(individual, other)] # avoid self-comparison
     )
     # print(sharing_sum)
-    return fitnessvalue + sharing_sum, predict_value
+    return fitnessvalue *(1+sharing_sum), predict_value
 
 
 def fitness_sharing(population, descriptor, niche_radius, fitness_func="L1",share=False,reduction="sum",weight=None,soft_penalty=False):
@@ -601,7 +601,7 @@ def fitness_sharing(population, descriptor, niche_radius, fitness_func="L1",shar
             s_ij=sharing_function(individual, ind2, niche_radius)
             sharing_sum += s_ij
         shared_fitness.append(
-            fitness_value[i] + sharing_sum)
+            fitness_value[i]*(1+sharing_sum))
           
     # print(max(shared_fitness))
     return shared_fitness, predict_values
@@ -636,19 +636,19 @@ def write_file(Atoms_list, foldername):
     for atoms in Atoms_list:
         write(f"{foldername}/individual_{n}.xyz", atoms, format="xyz")
         n += 1
-def find_index_2d(array_2d, array_1d):
+ef find_index_2d(array_2d, array_search):
     """
     Finds the index of a 1D array within a 2D NumPy array.
 
     Args:
-        array_2d: A 2D NumPy array.
-        array_1d: A 1D NumPy array to search for.
+        Array_2d: A list of 2D-array.
+        array_search: A specific array to search for.
 
     Returns:
         The index of the first occurrence of array_1d in array_2d, or -1 if not found.
     """
     for i, row in enumerate(array_2d):
-        if np.array_equal(row, array_1d):
+        if np.array_equal(row, array_search):
             return i
     return -1
 
@@ -684,25 +684,29 @@ def hash_particle(particle):
 
 
 def genetic_algorithm(
-   max_num_atoms=300,
-   generations=100,
-   population_size=100,
-   selection_pressure=2, # tournament selection for parents, default=5, 2-10
-   # num_steps=ini_configurations["num_steps"],
-   lc=3.924,
-   niche_radius=20,
-   initial_mutation_rate=0.5,
-   mutation_rate_decay=0.99,
-   cross_over_rate=0.8,
-   elite_num=5,
-   fitness_func="RAE",
-   reduction="mean",
-   weight=[1,1],
-   descriptors={"oblateness_moment": 1, "atom_number": 55},
-   share=False,
-   soft_penalty=False,
-   patience=10,
-   early_stopping_threshold=0.01):
+    max_num_atoms=200,
+    generations=40,
+    population_size=100,
+    selection_pressure=5,
+    lc=3.924,
+    cross_over_rate=0.3,
+    elite_num=2,
+    niche_radius=0.1,
+    initial_mutation_rate=1,
+    mutation_rate_decay=0.9,
+    weight=None,
+    share=False,
+    fitness_func="L1",
+    reduction="sum",
+    soft_penalty=False,
+    descriptors={"oblateness_moment": (1,0.01), "atom_number": (55,5)},
+    patience=10,
+    early_stopping_threshold=0.01,
+    # "CN1":6,
+    # "CN2":1.5,
+    # "CN3":2,
+    # "CN4":5
+):
 
     # 1. set up parameters
 
@@ -741,9 +745,11 @@ def genetic_algorithm(
     des_keys=list(descriptors.keys())
     print(f"initial population={len(populations)}")
     print_descriptors=[{des_keys[i]:descriptors[des_keys[i]][0]} for i in range(len(des_keys))] # for print out the descriptors used in the optimization
-    print(f"fitness_func={fitness_func}   reduction={reduction}   weight={weight}")
-    # print(len(fitness_values),len(populations))
-    # 4. start iteration
+    print(f"fit_property={print_descriptors}")
+    if share==False:
+        print(f"fitness_func={fitness_func}   reduction={reduction}   weight={weight}")
+    else:
+        print(f"fitness_func={fitness_func}_share_on   reduction={reduction}   weight={weight}")
     stopping=0
     for generation in (pbar := tqdm(range(generations))):
         time_start=time()
@@ -771,8 +777,8 @@ def genetic_algorithm(
         for i in (pbar:=tqdm(range(num_steps))):
             # [1]. find parents from populations based on fitness values
             # print(len(populations),len(parameters),len(fitness_values))
-            parent1 = parents(population_residual, fitness_values,k=selection_pressure,minimization=True) # tournament selection for parents    
-            parent2 = parents(population_residual, fitness_values,k=selection_pressure,minimization=True) 
+            parent1 = parents(population_residual, fitness_values_residual,k=selection_pressure,minimization=True) # tournament selection for parents
+            parent2 = parents(population_residual, fitness_values_residual,k=selection_pressure,minimization=True)
             children1, children2 = crossover(
                 lc, parent1, parent2,cross_over_rate=cross_over_rate,center_method="random"
             )
@@ -790,11 +796,11 @@ def genetic_algorithm(
             children2 = convex_particle(children2, lattice_big, lc)
 
             # print(len(children1),len(children2))
-            children1, children2 = crowding(parent1=parent1,parent2=parent2,
-                                                child1=children1,child2=children2,
-                                                descriptors=descriptors,
-                                                fitness_func=fitness_func,reduction=reduction,
-                                                weight=weight,soft_penalty=soft_penalty)
+            #children1, children2 = crowding(parent1=parent1,parent2=parent2,
+                                                #child1=children1,child2=children2,
+                                                #descriptors=descriptors,
+                                                #fitness_func=fitness_func,reduction=reduction,
+                                                #weight=weight,soft_penalty=soft_penalty)
             h1=hash_particle(children1)
             h2=hash_particle(children2)
             if h1 not in seen_hashes:
