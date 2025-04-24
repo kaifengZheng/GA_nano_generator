@@ -1,19 +1,21 @@
 sample_name="S1"
 max_num_atoms=200
-num_steps=100
 generations=100
 population_size=300
+selection_pressure=2
 lc=3.924
 cross_over_rate=0.8
-elite_fraction=0.01
+elite_num=0.05
 fitness_weight=[1.0,1.0,1.0]
-niche_radius=5
-alpha=1.2
+niche_radius=20
 share=true
 initial_mutation_rate=0.6
 mutation_rate_decay=0.999
 fitness_func="RAE" #RAE, L1,L2
 reduction="mean"   #mean max sum
+soft_penalty=false
+patience=10
+early_stopping threshold=0.01
 plot_descriptors=["CN1","CN2","CN3","CN4","GCN1","oblateness_pca","atom_number","diameter_2radius","diameter_pca","diameter_xy","SVR_CN","surface_CN","surface_GCN"]
 [descriptors]
 atom_number=127

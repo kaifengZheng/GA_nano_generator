@@ -398,7 +398,7 @@ def shift_particles(particle1,particle2,lc):
                shift_A=particle1+diffB_to_A
         return shift_A,particle2
 
-def mutation(particle, lc, max_num_atoms, mutation_rate=0.3,center_method="mean"): #center_method="mean"/"random"
+def mutation(particle, mutation_rate=0.3,center_method="mean"): #center_method="mean"/"random"
     mr = random.uniform(0, 1)
     # if mr <= mutation_rate/3:  # / 2:
     #     # renum = 0
@@ -439,7 +439,7 @@ def mutation(particle, lc, max_num_atoms, mutation_rate=0.3,center_method="mean"
                 particle_update = particle_update1
         else:
             particle_update = particle
-    elif mr >= mutation_rate * 1 / 2 and len(particle)>13:
+    elif mr >= mutation_rate * 1 / 2 and mr<mutation_rate and len(particle)>13:
         # 2. initialization of populations
         planes=[111,100,110]
         plane=random.choice(planes) # randomly select a plane to shift the particles, this is to avoid bias in the mutation process.
@@ -636,7 +636,7 @@ def write_file(Atoms_list, foldername):
     for atoms in Atoms_list:
         write(f"{foldername}/individual_{n}.xyz", atoms, format="xyz")
         n += 1
-ef find_index_2d(array_2d, array_search):
+def find_index_2d(array_2d, array_search):
     """
     Finds the index of a 1D array within a 2D NumPy array.
 
@@ -774,6 +774,7 @@ def genetic_algorithm(
                 populations_new.append(p)
         population_residual=[populations[i] for i in range(len(populations)) if i not in elites_index]
         num_steps=len(populations) # number of steps for each generation, each step will produce 2 children
+        fitness_values_residual = [fitness_values[i] for i in range(len(populations)) if i not in elites_index] # fitness values for the residual population, this will be used for the tournament selection of parents
         for i in (pbar:=tqdm(range(num_steps))):
             # [1]. find parents from populations based on fitness values
             # print(len(populations),len(parameters),len(fitness_values))
@@ -785,10 +786,10 @@ def genetic_algorithm(
 
             # print(f"children={len(np.where(np.array(children1)==1)[0]),len(np.where(np.array(children2)==1)[0])}")
             children1 = mutation(
-                children1, lc, max_num_atoms, mutation_rate=mutation_rate,center_method="random"
+                children1, mutation_rate=mutation_rate,center_method="random"
             )
             children2 = mutation(
-                children2, lc, max_num_atoms, mutation_rate=mutation_rate,center_method="random"
+                children2, mutation_rate=mutation_rate,center_method="random"
             )
             # convex hull
 
@@ -921,7 +922,6 @@ if __name__ == "__main__":
         population_size=ini_configurations["population_size"],
         selection_pressure=ini_configurations["selection_pressure"],
         share=ini_configurations["share"],
-        num_steps=ini_configurations["num_steps"],
         soft_panelty=ini_configurations["soft_penalty"], # using gaussian-like loss function
         patience=ini_configurations["patience"],
         ealy_stopping_threshold=ini_configurations["early_stopping_threshold"],
