@@ -1,24 +1,28 @@
 from itertools import *
+from typing_extensions import Counter
 import numpy as np
 import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 from ase import Atoms
 from ase.visualize import view
 from random import sample, seed
-from shape_proj_util.geo_tools.geometry import *
+from Geometry_util.geo_tools.geometry import *
 # from ase.io.xyz import write_xyz
 from ase.io import write
 from scipy.spatial.distance import cdist
 import random
 from tqdm.auto import tqdm
 from scipy.spatial import ConvexHull, QhullError
+from joblib import Parallel, delayed
+import multiprocessing
 from scipy.spatial import cKDTree
 # from ase.io.x3d import write_x3d
 import os
 import toml
 from time import time
 #import warnings
-import plotly.graph_objects as go
+
+from hashlib import sha1
 #warnings.filterwarnings("error")
 
 def fccbasis(a):
@@ -92,6 +96,12 @@ def empty_lattice(lc, n1, n2, n3):
 
 
 def order_pos(lattice, mid_position=None):
+    """
+     reorder the lattice by distance to the center. The first atom is the closest to the center.
+     @param lattice: the coordinates of the lattice
+     @param mid_position: the position of the center of the lattice, if None, the center of the lattice is set to mean of the lattice
+     return: ordered lattice
+    """
     if mid_position is None:
         mid_position = np.mean(lattice, axis=0)
     # reorder the lattice by distance to the center. The first atom is the closest to the center.
@@ -107,18 +117,23 @@ def order_pos(lattice, mid_position=None):
     return np.array(ordered_particle)
 
 # generate random lattice with random n1,n2,n3 of the superlattice parimeters, and random numbers of atoms in the lattice.
-def particles_encode_gen(lc, num_atoms=None, max_num_atoms=None,record_lattice=[]):
+def particles_encode_gen(lc, num_atoms=None, ini_num_atoms=None,record_lattice=[]):
+    """
+      Generate a random particle by given lattice constant, number of atoms or maximum number of atoms.
+      @param lc: lattice constant
+    """
     if num_atoms == None:
         # assert max_num_atoms!=None,"Please provide the maximum number of atoms in the lattice."
-        num_atoms = random.randint(12, max_num_atoms)
-    num_lattice = max_num_atoms #// 2
+        #The minimum number of atoms is set to 12
+        num_atoms = random.randint(12, ini_num_atoms)
+    num_lattice = ini_num_atoms #// 2
     # min_num_points=num_atoms
 
     # print(f"length={np.mean(lattice_big,axis=0)}")
     # times=random.randint(1,3)
     # the extreme case is that the particle has only one layer of unit cells, which has the dimension: np.sqrt(n_max**3)*np.sqrt(n_max**3)*1
-    n1 = random.randint(2, int(np.sqrt(num_lattice)))
-    n2 = random.randint(2, int(np.sqrt(num_lattice)))
+    n1 = random.randint(1, int(np.sqrt(num_lattice)))
+    n2 = random.randint(1, int(np.sqrt(num_lattice)))
     n3 = random.randint(1, int(np.sqrt(num_lattice)))
     # n3 = random.randint(1, int(np.sqrt(num_lattice)))
     # n1 = random.randint(n3, int(np.sqrt(num_lattice)))
@@ -130,7 +145,7 @@ def particles_encode_gen(lc, num_atoms=None, max_num_atoms=None,record_lattice=[
     while num_points <= num_atoms or [n1,n2,n3,num_atoms] in record_lattice:
         if num_atoms == None:
             # assert max_num_atoms!=None,"Please provide the maximum number of atoms in the lattice."
-            num_atoms = random.randint(12, max_num_atoms)
+            num_atoms = random.randint(12, ini_num_atoms)
         n1 = random.randint(1, int(np.sqrt(num_lattice)))
         n2 = random.randint(1, int(np.sqrt(num_lattice)))
         n3 = random.randint(1, int(np.sqrt(num_lattice)))
@@ -148,15 +163,14 @@ def particles_encode_gen(lc, num_atoms=None, max_num_atoms=None,record_lattice=[
 
 
 def ini_population(
-    lc, population_size, num_atoms=None, max_num_atoms=None,lc_record=[]
+    lc, population_size, num_atoms=None, ini_num_atoms=None,lc_record=[]
 ):
     generations = []
-    n = 0
     for i in range(population_size):
         particle,lc_record = particles_encode_gen(
             lc,
             num_atoms=num_atoms,
-            max_num_atoms=max_num_atoms,
+            ini_num_atoms=ini_num_atoms,
             record_lattice=lc_record #record lattice numbers to avoid duplicates
         )
         # print(nn)
@@ -164,73 +178,102 @@ def ini_population(
     return generations,lc_record
 
 
-def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weight:np.ndarray=None):
+def fitness(particle, descriptors: dict, fitness_func="L1", reduction="sum",weight:np.ndarray=None,soft_penalty=False,penalty_dict={"oblateness_moment":0}):
     if weight is None:
         weight=np.array([1]*len(descriptors.keys()))
+    if len(weight)<len(descriptors.keys()):
+        raise ValueError("Number of weights is less then the number of descriptors!")
+    if len(weight)>len(descriptors.keys()):
+        raise ValueError("Number of weights is more then the number of descriptors!")
     atom = Atoms(positions=particle, symbols=["Pt"] * len(particle))
+    
     try:
-        if "oblateness_moment" not in descriptors.keys():
-            cluster_descriptors = descriptor_table(
-            atom, all=False, descriptors=list(descriptors.keys()) + ["oblateness_moment"]
-            )
-        else:
             cluster_descriptors = descriptor_table(
                 atom,all=False,descriptors=list(descriptors.keys())
             )
+            # print(cluster_descriptors)
+            if penalty_dict is not None and len(penalty_dict)>0:
+                penalty_dict_keys=list(penalty_dict.keys())
+                penalty_descriptors = descriptor_table(
+                    atom,all=False,descriptors=penalty_dict_keys)
     except RuntimeWarning:
         print(f"calculate descriptor: {atom.get_positions()}")
     true_dis = []
+    tolerances=[]
     for k in descriptors.keys():
         if k != "ellipsoid":
-            true_dis.append(descriptors[k])
-        else:
             true_dis.append(descriptors[k][0])
-            true_dis.append(descriptors[k][1])
-            true_dis.append(descriptors[k][2])
+            tolerances.append(descriptors[k][1]) # tolerance for L1 and L2 distance, this is used for soft penalty in the similarity calculation
+        else:
+            true_dis.append(descriptors[k][0][0])
+            true_dis.append(descriptors[k][1][0])
+            true_dis.append(descriptors[k][2][0])
+            tolerances.append(descriptors[k][0][1]) 
+            tolerances.append(descriptors[k][1][1]) 
+            tolerances.append(descriptors[k][2][1])
     true_dis = np.array(true_dis)
-    # print(true_dis)
-    if "oblateness_moment" not in descriptors.keys():
-        pred_dis = np.array(
-            [cluster_descriptors[k] for k in list(cluster_descriptors.keys())[:-1]]
-        )
-    else:
-        pred_dis=np.array([cluster_descriptors[k] for k in list(cluster_descriptors.keys())])
-    # print(pred_dis)
-    # MSE
-    # np.sum((true_dis-pred_dis)**2)
+    tolerances = np.array(tolerances)
+    pred_dis=np.array([cluster_descriptors[k] for k in list(cluster_descriptors.keys())])
     sim = 0
-    if cluster_descriptors["oblateness_moment"] > 1:
-        if fitness_func=="L1":
-            sim = np.abs(true_dis - pred_dis)
-        elif fitness_func=="L2":
-            sim = np.power(true_dis - pred_dis, 2)
-        elif fitness_func=="RAE":
-            sim = (np.abs(true_dis - pred_dis) / true_dis)
-
-        if reduction=="sum":
-            sim = np.dot(sim,weight) * 10 ** cluster_descriptors["oblateness_moment"]
-        elif reduction=="mean":
-            sim = np.dot(sim,weight)/np.sum(weight) * 10 ** cluster_descriptors["oblateness_moment"]
-        elif reduction=="max":
-            sim = np.max(np.multiply(sim,weight)) * 10 ** cluster_descriptors["oblateness_moment"]
+    if penalty_dict is not None or len(penalty_dict)>0:
+        if penalty_descriptors[list(penalty_dict.keys())[0]]<penalty_dict[list(penalty_dict.keys())[0]]:
+            penalty=1000
+        else:
+            penalty=0
     else:
+        penalty=0
+    if soft_penalty:
+        sim= 1-np.exp(-((true_dis - pred_dis) ** 2) / (2 * (tolerances ** 2)))+penalty
+    else:
+        diff=np.abs(true_dis - pred_dis)+penalty
+        # sim = np.where(diff <= tolerances, (diff/tolerances)**2,100*diff)  # soft penalty for L1 and L2
+        # sim = np.where(diff <= tolerances, diff,100*diff)  # soft penalty for L1 and L2
         if fitness_func=="L1":
-            sim = np.abs(true_dis - pred_dis)
-            # print(sim)
+            sim = np.maximum(0, diff - tolerances)+penalty  # soft penalty for L1
         elif fitness_func=="L2":
-            sim = np.power(true_dis - pred_dis, 2)
+            sim = np.maximum(0, (diff - tolerances) ** 2)+penalty  # soft penalty for L2
         elif fitness_func=="RAE":
-            sim = (np.abs(true_dis - pred_dis) / true_dis)
-        if reduction=="sum":
-            sim = np.sum(sim) 
-        elif reduction=="mean":
-            sim = np.mean(sim) 
-        elif reduction=="max":
-            sim = np.max(sim)
+            # Avoid division by zero by adding a small epsilon where true_dis is zero
+            epsilon = 1e-8
+            sim = np.maximum(0, (diff - tolerances) / (true_dis + epsilon))+penalty  # soft penalty for RAE
+
+    if reduction=="sum":
+        sim = np.dot(sim,weight) 
+    elif reduction=="mean":
+        # print(f"mean={sim}")
+        sim = np.dot(sim,weight)/np.sum(weight) 
+    elif reduction=="max":
+        sim = np.max(np.multiply(sim,weight)) 
     return sim, pred_dis
 
+def tournament_selection(population, fitness, k=3, minimization=True):
+    """
+    Select an individual from the population using tournament selection: randomly select k individuals 
+    and choose the best one.
+    """
+    indices = np.random.choice(len(population), k, replace=False)
+    selected = [population[i] for i in indices]
+    selected_fitness = [fitness[i] for i in indices]
 
-def parents(population, fitness_values, tol=1e5):
+    if minimization:
+        winner_index = np.argmin(selected_fitness)
+    else:
+        winner_index = np.argmax(selected_fitness)
+    
+    return selected[winner_index]
+
+def parents(population, fitness_values,k=5, minimization=True):
+    """
+     Select a parent from the population using tournament selection.
+    """
+    parent1 = tournament_selection(population, fitness_values, k=k, minimization=minimization)
+    return parent1
+
+##+++++++another method++++++++++++
+def parents_rank(population, fitness_values, tol=1e5):
+    """
+     Select a parent from the population using ranking-based selection.
+    """
     fitness_values = np.array(fitness_values)
     ranking = ranking_fitness(fitness_values)
     prob = normalized_p(ranking)
@@ -249,6 +292,9 @@ def parents(population, fitness_values, tol=1e5):
 
 
 def ranking_fitness(fitness_values):
+    """
+     Rank the fitness values in ascending order (lower fitness is better).
+    """
     fitness_ranking = np.zeros(len(fitness_values))
     fitness_dict = Counter(fitness_values)
     fitness_ordered = sorted(fitness_dict.keys(), reverse=False)
@@ -261,7 +307,6 @@ def ranking_fitness(fitness_values):
     return fitness_ranking
 
 
-
 def probability_selection(fitness_ranking):
     R = len(fitness_ranking)
     lamb = np.log(10) / (len(fitness_ranking) - 1)
@@ -270,38 +315,33 @@ def probability_selection(fitness_ranking):
     z_sum = np.sum(z)
     return z / z_sum
 
-
-
 def normalized_p(fitness_ranking):
     p = probability_selection(fitness_ranking)
     return p
 
 
-def atom_cut_up_down_center(particle, theta, phi,center_method="mean"):
+def atom_cut_up_down_center(particle, theta, phi,center,center_method='mean'):
+    """
+    Truncate the particle into upper and lower parts based on the normal vector in the mutation and crossover stages.
+    """
     def normal_vector(center,theta, phi):
-        return np.array(
+        plane_normal=np.array(
             [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
         )
+        plane_normal=plane_normal/np.linalg.norm(plane_normal)
+        return plane_normal
 
     num_atoms = len(particle)
     particle = np.array(particle)
     if num_atoms < 5:
         print("Warning particle is less than 5 atoms")
-        return particle, particle
+        return particle,[]
 
     particle = np.array(particle)
-    
-    # for i in range(len(particle)):
-    #     CN1,dis=getCN_dis_Oneshell(particle,particle[i],1,thickness=0.1)
-    #     if CN1==12:
-    #         center_get.append(particle[i])
-    # if len(center_get)!=0:
-
+    center_real = np.mean(particle, axis=0)
     min_dim=np.min(particle,axis=0)
     max_dim=np.max(particle,axis=0)
     diff=np.min(max_dim-min_dim)/2
-    center_real = np.mean(particle, axis=0)
-    # center_choiced=np.random.choice(center_select)
     if center_method=="random":
         center0=np.random.uniform(center_real[0]-np.sqrt((diff**2)/3),center_real[0]+np.sqrt((diff**2)/3))
         center1=np.random.uniform(center_real[1]-np.sqrt((diff**2)/3),center_real[1]+np.sqrt((diff**2)/3))
@@ -316,26 +356,21 @@ def atom_cut_up_down_center(particle, theta, phi,center_method="mean"):
     normal = normal_vector(center,theta, phi)
     trancate_upparticle = []
     trancate_downparticle = []
-    for pos in particle:
-        if normal[0]*(pos[0]-center[0])+normal[1]*(pos[1]-center[1])+normal[2]*(pos[2]-center[2])>0:
-            # print("down")
-            trancate_upparticle.append([pos[0], pos[1], pos[2]])
-        else:
-            trancate_downparticle.append([pos[0], pos[1], pos[2]])
-    # print(len(trancate_up_particle))
-    # print(len(trancate_down_particle))
+    distances=np.dot(particle-center,normal)
+    trancate_upparticle=particle[distances>0]
+    trancate_downparticle=particle[distances<=0]
     return np.array(trancate_upparticle), np.array(trancate_downparticle)
 
-def align_crystal(particle, lattice_big):
-            select=np.random.randint(len(particle))
-            center_A=particle[select]
-            distance=cdist([center_A],lattice_big)[0]
-            index=np.where(distance==np.min(distance))[0][0]
-            center_B=lattice_big[index]
 
-            diff=center_A-center_B    
-            particle=particle-diff
-            return particle
+def align_crystal(particle, lattice_big):
+    select=np.random.randint(len(particle))
+    center_A=particle[select]
+    distance=cdist([center_A],lattice_big)[0]
+    index=np.where(distance==np.min(distance))[0][0]
+    center_B=lattice_big[index]
+    diff=center_A-center_B    
+    particle=particle-diff
+    return particle
 
 def remove_duplicates(particle, lc):
         duplicates = []
@@ -347,31 +382,44 @@ def remove_duplicates(particle, lc):
             if np.isclose(dis_sort[1],0,rtol=1e-5):
                   index=np.where(dis==dis_sort[1])[0][0]
                   index_get.append(sorted([i,index]))
-                  
-        # #     print(dis_where)
-        #     if len(dis_where)>1:
-        #         index=[dis_where[j] for j in range(len(dis_where)) if dis_where[j]!=i]
-        #         duplicates.extend(index)
-        # print(f"xyz={index_get}")
         for i in range(len(index_get)):
                duplicates.append(index_get[i][1])
         
         duplicates=np.unique(duplicates)
-        print(duplicates)
         return np.array([particle[i] for i in range(len(particle)) if i not in duplicates])
 
 def crossover(lc, parent1, parent2, cross_over_rate=0.6,center_method="mean"):
+    parent2=align_point_clouds_pca(parent2, parent1)
     if random.random() < cross_over_rate:
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
-        # parent1_particle=recon_coordfromcodes(parent1,lc,max_num_atoms)
-        # parent2_particle=recon_coordfromcodes(parent2,lc,max_num_atoms)
+        min_dim=np.min(parent1,axis=0)
+        max_dim=np.max(parent1,axis=0)
+        diff=np.min(max_dim-min_dim)/2
+        center_real = np.mean(parent1, axis=0)
+        min_dim=np.min(parent2,axis=0)
+        max_dim=np.max(parent2,axis=0)
+        diff=np.min(max_dim-min_dim)/2
+        center_real2 = np.mean(parent2, axis=0)
+        center_diff=center_real-center_real2
+        parent2=parent2+center_diff
+        
+        if center_method=="random":
+            center0=np.random.uniform(center_real[0]-np.sqrt((diff**2)/3),center_real[0]+np.sqrt((diff**2)/3))
+            center1=np.random.uniform(center_real[1]-np.sqrt((diff**2)/3),center_real[1]+np.sqrt((diff**2)/3))
+            center2=np.random.uniform(center_real[2]-np.sqrt((diff**2)/3),center_real[2]+np.sqrt((diff**2)/3))
+        elif center_method=="mean":
+            center0=center_real[0]
+            center1=center_real[1]
+            center2=center_real[2]
+        else:
+            raise ValueError(f"\"{center_method}\" can not be reconized as method, center method should be either \"random\" or \"mean\" (default: center_method=\"center\")!")
+        center=np.array([center0,center1,center2])
         try:
-            parent1_up, parent1_down = atom_cut_up_down_center(parent1, theta, phi, lc,center_method=center_method)
-            parent2_up, parent2_down = atom_cut_up_down_center(parent2, theta, phi, lc,center_method=center_method)
+            parent1_up, parent1_down = atom_cut_up_down_center(parent1, theta, phi, lc,center)
+            parent2_up, parent2_down = atom_cut_up_down_center(parent2, theta, phi, lc,center)
         except:
             return parent1, parent2
-        dist=np.sort(cdist(parent1_up,parent2_down))
         parent1 = np.vstack((parent1_up, parent2_down))
         parent2 = np.vstack((parent1_down, parent2_up))
         parent1 = remove_duplicates(parent1, lc)
@@ -382,43 +430,55 @@ def crossover(lc, parent1, parent2, cross_over_rate=0.6,center_method="mean"):
     else:
         return parent1, parent2
 
+def shift_particles(particle1,particle2,lc):
+        dist=cdist(particle1,particle2)
+        short=np.min(dist,axis=1)
+        index_A=np.where(short==np.min(short))[0][0]
+        index_B=np.where(dist[index_A]==np.min(short))[0][0]
+        
+        if np.min(dist)<=lc/2:
+               shift_A=particle1
+        else:
+               diffB_to_A=particle2[index_B]-particle1[index_A]
+               shift_A=particle1+diffB_to_A
+        return shift_A,particle2
 
-
-def mutation(particle, lc, max_num_atoms, mutation_rate=0.3):
+def mutation(particle, mutation_rate=0.3,center_method="mean"): #center_method="mean"/"random"
     mr = random.uniform(0, 1)
-    # if mr <= mutation_rate/3:  # / 2:
-    #     # renum = 0
-    #     # theta = random.uniform(0, np.pi)
-    #     # phi = random.uniform(0, 2 * np.pi)
-    #     # particle_update = atom_trancate_center(particle, theta, phi)
-    #     # while len(particle_update) < 5 and renum < 5:
-    #     #     theta = random.uniform(0, np.pi)
-    #     #     phi = random.uniform(0, 2 * np.pi)
-    #     #     # if renum==0:
-    #     #     #     print("no good 1")
-    #     #     particle_update = atom_trancate_center(particle, theta, phi)
-    #     #     renum += 1
-    if mr <= mutation_rate * 3 / 4 and len(particle)>12:  # and mr <= mutation_rate * 2 / 3:
+
+
+    if mr <= mutation_rate * 1 / 2 and len(particle)>13:  # and mr <= mutation_rate * 2 / 3:
         theta = random.uniform(0, np.pi)
         phi = random.uniform(0, 2 * np.pi)
-        particle_update1,particle_update2  = atom_cut_up_down_center(particle, theta, phi,center_method="random")
-        if len(particle_update1)>12 and len(particle_update2)>12:
+        min_dim=np.min(particle,axis=0)
+        max_dim=np.max(particle,axis=0)
+        diff=np.min(max_dim-min_dim)/2
+        center_real = np.mean(particle, axis=0)
+        if center_method=="random":
+            center0=np.random.uniform(center_real[0]-np.sqrt((diff**2)/3),center_real[0]+np.sqrt((diff**2)/3))
+            center1=np.random.uniform(center_real[1]-np.sqrt((diff**2)/3),center_real[1]+np.sqrt((diff**2)/3))
+            center2=np.random.uniform(center_real[2]-np.sqrt((diff**2)/3),center_real[2]+np.sqrt((diff**2)/3))
+        elif center_method=="mean":
+            center0=center_real[0]
+            center1=center_real[1]
+            center2=center_real[2]
+        else:
+            raise ValueError(f"\"{center_method}\" can not be reconized as method, center method should be either \"random\" or \"mean\" (default: center_method=\"center\")!")
+        center=np.array([center0,center1,center2])
+        particle_update1,particle_update2  = atom_cut_up_down_center(particle, theta, phi,center)
+        if len(particle_update1)>13 and len(particle_update2)>13:
             if len(particle_update1)<=len(particle_update2):
                 particle_update = particle_update2
             elif len(particle_update1)>len(particle_update2):
                 particle_update = particle_update1
         else:
             particle_update = particle
-    elif (mr >= mutation_rate * 3 / 4 and mr <= mutation_rate) and len(particle)>12:
+    elif mr >= mutation_rate * 1 / 2 and mr<=mutation_rate and len(particle)>13:
         # 2. initialization of populations
-        particle_update = ini_population(
-            lc=lc,
-            population_size=1,
-            # lattice_big=lattice_big,
-            max_num_atoms=max_num_atoms,
-            num_atoms=None,
-        )[0][0]
-
+        planes=[111,100,110]
+        plane=random.choice(planes) # randomly select a plane to shift the particles, this is to avoid bias in the mutation process.
+        particle_update=cut_by_surface(particle,plane,1)
+        
     else:
         particle_update = particle
     
@@ -450,12 +510,12 @@ def is_point_in_hull(point, hull, lc):
     )
 
 
-def find_most_similar(population, individual, crowding_distance=0.1):
+def find_most_similar(population, individual):
     return np.array(
         [
             min(
                 population,
-                key=lambda x: calculate_similarity(x, individual, crowding_distance),
+                key=lambda x: calculate_similarity(x, individual),
             )
         ]
     )[0]
@@ -520,21 +580,12 @@ def align_point_clouds_pca(particle1, particle2):
     return aligned_source
 
 
-def sharing_function(ind1, ind2, niche_radius, alpha):
-    distance = calculate_similarity(ind1, ind2, niche_radius)
-    if distance < niche_radius:
-        return  ((distance+1e-4) / niche_radius) ** alpha #alpha > 0
-    else:
-        return 1e-8 #+ (niche_radius/distance)**alpha  # return 0.0 to avoid division by zero in shared_fitness_value
+def sharing_function(ind1, ind2, niche_radius):
+    distance = calculate_similarity(ind1, ind2)
+    return   np.exp(- (distance ** 2) / (2 * (niche_radius / 2) ** 2)) if distance < niche_radius else 0
 
 def calculate_similarity(ind1, ind2):
-    # atoms1 = Atoms(positions=ind1, symbols=["Pt"] * len(ind1))
-    # atoms2 = Atoms(positions=in2, symbols=["Pt"] * len(in2))
-    # des_atoms1 = descriptor_table(atoms1)
-    # score1 = np.array(np.array([des_atoms1[k] for k in des_atoms1.keys()]))
-    # des_atoms2 = descriptor_table(atoms2)
-    # score2 = np.array([des_atoms2[k] for k in des_atoms2.keys()])
-    # return np.mean((score1 - score2) ** 2)
+
     ind1 = align_point_clouds_pca(ind1, ind2)
     dist = chamfer_distance(ind1, ind2)
     # print(dist)
@@ -542,55 +593,95 @@ def calculate_similarity(ind1, ind2):
     return dist 
 
 
-def shared_fitness_value(individual, descriptor, population, niche_radius, alpha,fitness_func,reduction,weight):
-    fitnessvalue, predict_value = fitness(individual, descriptor,fitness_func,reduction,weight)
-    sharing_sum = np.mean(
-        [sharing_function(individual, other, niche_radius, alpha) for other in population if not np.array_equal(individual, other)] # avoid self-comparison
+def shared_fitness_value(individual, descriptor, population, niche_radius, fitness_func,reduction,weight,soft_penalty=False,tolerances=1e-5):
+    fitnessvalue, predict_value = fitness(individual, descriptor,fitness_func,reduction,weight, soft_penalty=soft_penalty, tolerances=tolerances)
+    sharing_sum = np.sum(
+        [sharing_function(individual, other, niche_radius) for other in population if not np.array_equal(individual, other)] # avoid self-comparison
     )
     # print(sharing_sum)
-    return fitnessvalue / (sharing_sum), predict_value
+    return fitnessvalue *(1+sharing_sum), predict_value
 
 
 
-def fitness_sharing(population, descriptor, niche_radius, alpha,fitness_func="L1",share=False,reduction="sum",weight=None):
+def fitness_sharing(population, descriptor, niche_radius, fitness_func="L1",share=False,reduction="sum",weight=None,soft_penalty=False):
     
     shared_fitness = []
     predict_values = []
-    for individual in population:
-        if share==False:
-            fitness_value, predict_value = fitness(individual, descriptor,fitness_func,reduction,weight)
-        else:
-            fitness_value, predict_value=shared_fitness_value(
-            individual, descriptor, population, niche_radius, alpha,fitness_func,reduction,weight
-        )
-        shared_fitness.append(fitness_value)
-        predict_values.append(predict_value)
+    distance_cache={}
+    fitness_results = Parallel(n_jobs=6)(
+    delayed(fitness)(individual, descriptor,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    for individual in population
+    )
+    fitness_value, predict_values = zip(*fitness_results)
+    if not share:
+        # If sharing is not enabled, return the original fitness values
+        return list(fitness_value), list(predict_values)
+    
+    for i,individual in enumerate(population):
+        sharing_sum=0
+        for j, ind2 in enumerate(population):
+            if i == j:
+                continue
+            key=tuple(sorted((i,j)))
+            if key not in distance_cache:
+                # Calculate the similarity only once for each pair of individuals
+                distance_cache[key] = calculate_similarity(individual, ind2)
+            s_ij=sharing_function(individual, ind2, niche_radius)
+            sharing_sum += s_ij
+        shared_fitness.append(
+            fitness_value[i]*(1+sharing_sum))
+          
+    # print(max(shared_fitness))
     return shared_fitness, predict_values
-def crowding(parent1,parent2,child1,child2,population,descriptors,fitness_func,reduction,niche_radius=0.1,alpha=1,weight=None,share=False):
+
+
+def crowding(parent1,parent2,child1,child2,descriptors,fitness_func,reduction,weight=None, soft_penalty=False, tolerances=1e-5):
     # print(f"parent1={parent1}")
     # print(f"parent2={parent2}")
     # print(f"child1={child1}")
     # print(f"child2={child2}")
+    # print([len(parent1),len(parent2),len(child1),len(child2)])
     pc11 = calculate_similarity(parent1, child1) 
     pc22 = calculate_similarity(parent2, child2)
     pc12 = calculate_similarity(parent1, child2)
     pc21 = calculate_similarity(parent2, child1)
-    if share==True:
-        fitp1,_=shared_fitness_value(parent1, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
-        fitp2,_=shared_fitness_value(parent2, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
-        fitch1,_=shared_fitness_value(child1, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
-        fitch2,_=shared_fitness_value(child2, descriptors, population, niche_radius, alpha,fitness_func,reduction,weight)
-    if share==False:
-        fitp1, _ = fitness(parent1, descriptors,fitness_func,reduction,weight)
-        fitp2, _ = fitness(parent2, descriptors,fitness_func,reduction,weight)
-        fitch1, _ = fitness(child1, descriptors,fitness_func,reduction,weight)
-        fitch2, _ = fitness(child2, descriptors,fitness_func,reduction,weight)
-    if pc11+pc22 <= pc12+pc21:
-        new_parent1 = child1 if fitch1 < fitp1 else parent1
-        new_parent2 = child2 if fitch2 < fitp2 else parent2
+
+    fitp1, _ = fitness(parent1, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    fitp2, _ = fitness(parent2, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    fitch1, _ = fitness(child1, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    fitch2, _ = fitness(child2, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    if pc11 + pc22 <= pc12 + pc21:
+        match = [(parent1, child1, fitp1, fitch1), (parent2, child2, fitp2, fitch2)]
     else:
-        new_parent1 = child2 if fitch2 < fitp1 else parent1
-        new_parent2 = child1 if fitch1 < fitp2 else parent2
+        match = [(parent1, child2, fitp1, fitch2), (parent2, child1, fitp2, fitch1)]
+
+    # Decide replacements
+    new_gen = []
+    for p, c, fitp, fitch in match:
+        sim = calculate_similarity(p, c)
+        if fitch < fitp or sim > 0.5:
+            new_gen.append(c)
+        else:
+            new_gen.append(p)
+
+    return new_gen[0], new_gen[1]
+def fit_selection(parent1,parent2,child1,child2,descriptors,fitness_func,reduction,weight=None, soft_penalty=False, tolerances=1e-5):
+    # print(f"parent1={parent1}")
+    # print(f"parent2={parent2}")
+    # print(f"child1={child1}")
+    # print(f"child2={child2}")
+    # print([len(parent1),len(parent2),len(child1),len(child2)])
+    # pc11 = calculate_similarity(parent1, child1) 
+    # pc22 = calculate_similarity(parent2, child2)
+    # pc12 = calculate_similarity(parent1, child2)
+    # pc21 = calculate_similarity(parent2, child1)
+
+    fitp1, _ = fitness(parent1, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    fitp2, _ = fitness(parent2, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    fitch1, _ = fitness(child1, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    fitch2, _ = fitness(child2, descriptors,fitness_func,reduction,weight, soft_penalty=soft_penalty)
+    new_parent1 = child1 if fitch1 < fitp1 else parent1
+    new_parent2 = child2 if fitch2 < fitp2 else parent2
     return new_parent1,new_parent2
 
 def write_file(Atoms_list, foldername):
@@ -643,35 +734,39 @@ def draw_ellipsoid(atoms, save=False, filename="ellipsoid.png"):
     ax.plot_surface(x, y, z, rstride=4, cstride=4, color="cyan", alpha=0.3)
     ax.scatter(position[:, 0], position[:, 1], position[:, 2], color="red")
     fig.savefig(filename)
-
-
+def hash_particle(particle):
+    return sha1(np.round(particle,4).tobytes()).hexdigest() # use sha1 to hash the particle,
+                                                            # this will help to avoid duplicates 
+                                                            # in the population, round to 4 decimal 
+                                                            # places to avoid floating point issues.
 def genetic_algorithm(
-    max_num_atoms=200,
+    ini_num_atoms=200,
     generations=40,
-    num_steps=100,
     population_size=100,
-    lc=3.77,
+    selection_pressure=5,
+    lc=3.924,
     cross_over_rate=0.3,
-    elite_fraction=0.05,
-    percentage=0.75,
+    elite_num=2,
     niche_radius=0.1,
-    alpha=1,
     initial_mutation_rate=1,
     mutation_rate_decay=0.9,
     weight=None,
     share=False,
     fitness_func="L1",
     reduction="sum",
-    descriptors={"oblateness_moment": 1, "atom_number": 55}
+    soft_penalty=False,
+    descriptors={"oblateness_moment": (1,0.01), "atom_number": (55,5)},
+    patience=10,
+    early_stopping_threshold=0.01,
     # "CN1":6,
     # "CN2":1.5,
     # "CN3":2,
     # "CN4":5
 ):
     # 1. set up parameters
-
+    stopping=0
     print(descriptors)
-    num_lattice = max_num_atoms  # since one unit cell of fcc lattice has 2 atoms
+    num_lattice = ini_num_atoms  # since one unit cell of fcc lattice has 2 atoms
     n_max = int(np.ceil(np.cbrt(num_lattice)))
     lattice_big = extendfcc(
         fccbasis(lc),
@@ -687,7 +782,7 @@ def genetic_algorithm(
         lc=lc,
         population_size=population_size,
         num_atoms=None,
-        max_num_atoms=max_num_atoms,
+        ini_num_atoms=ini_num_atoms,
         lc_record=lc_record
     )
     mutation_rate = initial_mutation_rate
@@ -699,92 +794,110 @@ def genetic_algorithm(
     time_cost_record=[]
     # best_particle = []
     # 3. calculate fitness for populations
-    fitness_values = fitness_sharing(populations, descriptors, 
-                                     niche_radius, alpha,
-                                     fitness_func=fitness_func,share=share,
-                                     reduction=reduction,weight=weight)[0]
+    fitness_values = fitness_sharing(population=populations, descriptor=descriptors, 
+                                     niche_radius=niche_radius,
+                                     fitness_func=fitness_func,share=share,reduction=reduction,weight=weight,soft_penalty=soft_penalty)[0]
     print(f"initial population={len(populations)}")
     print(f"fit_property={descriptors}")
-    print(f"fitness_func={fitness_func}   reduction={reduction}   weight={weight}")
+    if share==False:
+        print(f"fitness_func={fitness_func}   reduction={reduction}   weight={weight}")
+    else:
+        print(f"fitness_func={fitness_func}_share_on   reduction={reduction}   weight={weight}")
     # print(len(fitness_values),len(populations))
     # 4. start iteration
     for generation in (pbar := tqdm(range(generations))):
         time_start=time()
-        # clustering_energy_values=[clustering_energy(genome,lattice) for genome in population]
-        # (1). generate new populations
         fit_pop = dict()
+        seen_hashes=set()
         for i in range(len(populations)):
             fit_pop[fitness_values[i]] = populations[i]
         sorted_population = [
             sorted(fit_pop.items(), key=lambda item: item[0], reverse=False)[i][1]
             for i in range(len(fit_pop))
         ]
-        # print(population_size,elite_fraction)
-        num_elites = int(population_size * elite_fraction)
-        elites = sorted_population[:num_elites]
+        elites = sorted_population[:elite_num]
         # check duplicates, if duplicates exist, then generate a new structure
+        populations_new = [] 
+        for p in elites:
+            h=hash_particle(p)
+            if h not in seen_hashes:
+                seen_hashes.add(h)
+                populations_new.append(p)
         elites_index=np.unique(np.array([find_index_2d(populations,elites[i]) for i in range(len(elites))]))
-        populations_residual=[populations[i] for i in range(len(populations)) if i not in elites_index]
-        fitness_values_residual=[fitness_values[i] for i in range(len(fitness_values)) if i not in elites_index]
+        population_residual=[populations[i] for i in range(len(populations)) if i not in elites_index]
+        fitness_values_residual = [fitness_values[i] for i in range(len(populations)) if i not in elites_index]
+        num_steps=len(populations)
         for i in (pbar:=tqdm(range(num_steps))):
             # [1]. find parents from populations based on fitness values
             # print(len(populations),len(parameters),len(fitness_values))
-            parent1 = parents(populations_residual, fitness_values_residual)
-            parent2 = parents(populations_residual, fitness_values_residual)
-            index1=find_index_2d(populations,parent1)
-            index2=find_index_2d(populations,parent2)
-            parent1 = np.array(parent1)
-            parent2 = np.array(parent2)
-            # fit_parent1=fitness(parent1,lc,max_num_atoms,descriptors)
-            # fit_parent2=fitness(parent2,lc,max_num_atoms,descriptors)
-            # [2]. crossover and mutation to generate offsprings
+            parent1 = parents(population_residual, fitness_values_residual)
+            parent2 = parents(population_residual, fitness_values_residual)
             children1, children2 = crossover(
                 lc, parent1, parent2,cross_over_rate=cross_over_rate,center_method="mean"
             )
 
-
             # print(f"children={len(np.where(np.array(children1)==1)[0]),len(np.where(np.array(children2)==1)[0])}")
             children1 = mutation(
-                children1, lc, max_num_atoms, mutation_rate=mutation_rate
+                children1, mutation_rate=mutation_rate,center_method="random"
             )
             children2 = mutation(
-                children2, lc, max_num_atoms, mutation_rate=mutation_rate
+                children2, mutation_rate=mutation_rate,center_method="random"
             )
             # convex hull
 
             children1 = convex_particle(children1, lattice_big, lc)
             children2 = convex_particle(children2, lattice_big, lc)
-            children1, children2 = crowding(parent1=parent1,parent2=parent2,
-                                            child1=children1,child2=children2,
-                                            population=populations,descriptors=descriptors,
-                                            fitness_func=fitness_func,reduction=reduction,
-                                            niche_radius=niche_radius,alpha=alpha,weight=weight,share=share)
-            populations[index1] = children1
-            populations[index2] = children2
 
-        # (2). calculate fitness for new populations and obtain the predicted descriptors
+            # print(len(children1),len(children2))
+
+            children1, children2 = crowding(parent1=parent1,parent2=parent2,
+                                                child1=children1,child2=children2,
+                                                descriptors=descriptors,
+                                                fitness_func=fitness_func,reduction=reduction,
+                                                weight=weight,soft_penalty=soft_penalty)
+                                                
+            h1=hash_particle(children1)
+            h2=hash_particle(children2)
+            if h1 not in seen_hashes:
+                seen_hashes.add(h1)
+                populations_new.append(children1)
+            if h2 not in seen_hashes:
+                seen_hashes.add(h2)
+                populations_new.append(children2)
+            if len(populations_new) >= population_size:
+                break
+        print(f"populations_new={len(populations_new)}")
+        if len(populations_new)>population_size:
+            populations_new=populations_new[:population_size]
+        if len(populations_new)<population_size:        
+            populations_new.extend(ini_population(
+            lc=lc,
+            population_size=population_size-len(populations_new), # fill the population to the original size
+            # lattice_big=lattice_big,
+            ini_num_atoms=ini_num_atoms,
+            num_atoms=None,
+        )[0])
+        
         fitness_values = []
         predict_values = []
         fitness_values, predict_values = fitness_sharing(
-            population=populations, descriptor=descriptors, niche_radius=niche_radius, 
-            fitness_func=fitness_func,share=share,alpha=alpha,reduction=reduction,weight=weight
+            population=populations_new, descriptor=descriptors, niche_radius=niche_radius, 
+            fitness_func=fitness_func,share=share,reduction=reduction,weight=weight, soft_penalty=soft_penalty
         )
-        fitness_v, _ = fitness_sharing(
-            populations, descriptors, niche_radius=niche_radius,fitness_func=fitness_func,share=False, alpha=alpha,reduction=reduction
-        )
+        # fitness_v, _ = fitness_sharing(
+        #     populations_new, descriptors, niche_radius=niche_radius,fitness_func=fitness_func,share=False, alpha=alpha,reduction=reduction
+        # )
         best_fitness = min(fitness_values)
-        ave_fitness = np.mean(fitness_v)
-        # std_fitness = np.std(fitness_values)
-        # best_predict = predict_values[fitness_values.index(best_fitness)]
-        fitness_value_sort = sorted(fitness_v)
+        ave_fitness = np.mean(fitness_values)
+        fitness_value_sort = sorted(fitness_values)
         quater_fitness_index = np.where(
-            np.array(fitness_v)
-            <= fitness_value_sort[int(len(fitness_v) * 0.75)]
+            np.array(fitness_values)
+            == fitness_value_sort[int(len(fitness_values) * 3//4)]
         )[0][0]
         predict_quater = predict_values[quater_fitness_index]
 
         best_index = fitness_values.index(best_fitness)
-        fitness_record.append(ave_fitness)  # dong
+        fitness_record.append(ave_fitness)  
         mutation_rate *= mutation_rate_decay
         time_end = time()
         time_cost = time_end - time_start
@@ -792,22 +905,26 @@ def genetic_algorithm(
         # print(mutation_rate)
         # [4]. print output
         print(
-            f"Generation{generation}: Finess={np.round(np.mean(fitness_v),3)}+/-{np.round(np.std(fitness_v),3)} Predict_Q3={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
+            f"Generation{generation}: Finess={np.round(np.mean(fitness_values),3)}+/-{np.round(np.std(fitness_values),3)} Predict_Q3={predict_quater} mutation_rate={np.round(mutation_rate,5)} time_cost={time_cost}"
         )
+        populations=populations_new
 
-        # [6]. early stopping
-        # if generation>10:
-        #     error=fitness_record[generation-1]-fitness_record[generation]
-        #     if error<1e-4:
-        #         break
+        #[6]. early stopping
+
+        if len(fitness_record)<patience:
+            continue
+        else:
+            recent=fitness_record[-1]
+            if fitness_record[-2]-fitness_record[-1]<early_stopping_threshold:
+                stopping+=1
+                print(f"stopping={stopping}")
+            if stopping >= patience:
+                break
     # 4. record the best solution
     best_index = fitness_values.index(best_fitness)
-
     print(f"best_index={best_index}")
     print(f"best_fitness={best_fitness},best_predict={predict_values[best_index]}")
-    best_solution = populations[best_index]
-    # best_atom = Atoms(positions=best_solution, symbols=["Pt"] * len(best_solution))
-    last_population = populations
+    last_population = populations_new
     last_atom_list = []
     for i in range(len(last_population)):
         last_atom_list.append(
@@ -831,42 +948,52 @@ def genetic_algorithm(
     #     np.randomduplicates exist, then generate a new structure
 def plot_radar(table,index,descriptors,multiplier,save=False):
     r=[table.iloc[index][descriptors[i]]*multiplier[i] for i in range(len(descriptors))]
-    fig=go.Figure(data=go.Scatterpolar(
-        r=r,
-        theta=[f"{descriptors[i]}*{multiplier[i]}" for i in range(len(descriptors))],
-        fill='toself'
-    ))
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True
-        ),
-        ),
-        showlegend=False
-    )
+    # fig=go.Figure(data=go.Scatterpolar(
+    #     r=r,
+    #     theta=[f"{descriptors[i]}*{multiplier[i]}" for i in range(len(descriptors))],
+    #     fill='toself'
+    # ))
+    # fig.update_layout(
+    #     polar=dict(
+    #         radialaxis=dict(
+    #             visible=True
+    #     ),
+    #     ),
+    #     showlegend=False
+    # )
+    N=len(descriptors)
+    angles = np.linspace(0, 2 * np.pi, N, endpoint=False)
+    fig=plt.figure(figsize=(6,6))
+    ax=fig.add_subplot(111, polar=True)
+    ax.set_xticks(angles, [f"{descriptors[i]}*{multiplier[i]}" for i in range(len(descriptors))],size=15)
+    ax.set_rlabel_position(0)
+    ax.plot(angles, r, 'o-', linewidth=2)
+    ax.fill(angles, r, alpha=0.25)
+
     #fig.show()
     if save:
-        fig.write_image(f"radar_{index}.svg",engine="kaleido")
+        fig.savefig(f"radar_{index}.jpg",format="jpg",dpi=300)
 if __name__ == "__main__":
     ini_configurations=toml.load("config.toml")
 
     fitness_record, last_atom_list, ini_atom_list,fitness_values,time_cost_record = genetic_algorithm(
-        max_num_atoms=ini_configurations["max_num_atoms"],
+        ini_num_atoms=ini_configurations["ini_max_num_atoms"],
         generations=ini_configurations["generations"],
-        population_size=ini_configurations["population_size"],
-        share=ini_configurations["share"],
-        num_steps=ini_configurations["num_steps"],
         lc=ini_configurations["lc"],
-        niche_radius=ini_configurations["niche_radius"],
-        alpha=ini_configurations["alpha"],
-        percentage=ini_configurations["save_config"]["percentage"],
+        population_size=ini_configurations["population_size"],
+        share=ini_configurations["niche_crowding"]["share"],
+        niche_radius=ini_configurations["niche_crowding"]["niche_radius"],
+        # alpha=ini_configurations["niche_crowding"]["alpha"],
         initial_mutation_rate=ini_configurations["initial_mutation_rate"],
         mutation_rate_decay=ini_configurations["mutation_rate_decay"],
-        weight=ini_configurations["fitness_weight"],
-        cross_over_rate=ini_configurations["cross_over_rate"],
-        elite_fraction=ini_configurations["elite_fraction"],
-        fitness_func=ini_configurations["fitness_func"],
-        reduction=ini_configurations["reduction"],
+        cross_over_rate=ini_configurations["cross_over_rate"], 
+        elite_num=ini_configurations["elite_num"],
+        weight=ini_configurations["fitness"]["fitness_weight"],
+        fitness_func=ini_configurations["fitness"]["fitness_func"],
+        soft_penalty=ini_configurations["fitness"]["soft_penalty"],
+        patience=ini_configurations["fitness"]["patience"],
+        early_stopping_threshold=ini_configurations["fitness"]["early_stopping_threshold"],
+        reduction=ini_configurations["fitness"]["reduction"],
         descriptors=ini_configurations["descriptors"],
     )
 
@@ -885,19 +1012,19 @@ if __name__ == "__main__":
     np.savetxt("fitness_last.txt",fitness_values)
     pdes = pd.DataFrame(particles_descriptors)
     pdes.to_csv("descriptors_" + extend + ".csv")
-    pdes[ini_configurations["plot_descriptors"]].hist(bins=100)
+    pdes[ini_configurations["hist_plot"]["plot_descriptors"]].hist(bins=100)
     plt.tight_layout()
     plt.savefig("dis_" + extend + ".png")
     if len(Atoms_3quarter)<10:
         for i in range(len(Atoms_3quarter)):
             write(f"best_{i}"+extend+".png",Atoms_3quarter[i],rotation='45x,45y,45z')
             if ini_configurations['plot_radar_conf']['save']:
-                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
+                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['radar_descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
     else:
         for i in range(10):
             write(f"best_{i}"+extend+".png",Atoms_3quarter[i],rotation='45x,45y,45z')
             if ini_configurations['plot_radar_conf']['save']:
-                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
+                plot_radar(pdes,i,ini_configurations['plot_radar_conf']['radar_descriptors'],multiplier=ini_configurations['plot_radar_conf']['multiplier'],save=True)
     write_file(Atoms_3quarter, "output_" + extend)
     try:
         draw_ellipsoid(

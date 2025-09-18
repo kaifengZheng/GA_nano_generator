@@ -1,34 +1,37 @@
 sample_name="S1"
-max_num_atoms=200
-generations=150
-population_size=300
 lc=3.924
+ini_max_num_atoms=100
+generations=150
+population_size=100
 cross_over_rate=0.6
-elite_fraction=0.01
-fitness_weight=[1.0,1.0]
-initial_crowding_distance=0.1
-niche_radius=0.1
-alpha=1
 initial_mutation_rate=1
 mutation_rate_decay=0.999
-fitness_func="RAE" #RAE, L1,L2
-reduction="max"   #mean max sum
-plot_descriptors=["CN1","CN2","CN3","CN4","GCN1","oblateness_moment","atom_number","diameter_2radius","SVR_CN","surface_CN","surface_GCN"]
+elite_num=5
+
 [descriptors]
-atom_number=109
-SVR_CN=0.77
+atom_number=[109.0,10.0]
+SAF_CN=[0.77,0.01]
 #S3
 #"diameter_2radius"=18.255
 #"SVR_CN"=0.671
-
+[niche_crowding]
+share=false
+niche_radius=0.1
+alpha=1
+[fitness]
+fitness_weight=[0.01,1.0]
+fitness_func="RAE" #RAE, L1,L2
+reduction="max"   #mean max sum
+soft_penalty=false
+patience=5
+early_stopping_threshold=0.01
 [save_config]
-percentage=1
-
-
-
+percentage=1.0
+[hist_plot]
+plot_descriptors=["CN1","CN2","CN3","CN4","GCN1","oblateness_moment","atom_number","diameter_2radius","SAF_CN","surface_CN","surface_GCN"]
 [plot_radar_conf]
 save=true
-descriptors=["CN1","GCN1","diameter_2radius","SVR_CN","oblateness_moment","atom_number"]
+radar_descriptors=["CN1","GCN1","diameter_2radius","SAF_CN","oblateness_moment","atom_number"]
 multiplier=[0.1,0.1,0.05,1.0,1.0,0.005]
 #S1
 #"diameter_2radius"=10.60
