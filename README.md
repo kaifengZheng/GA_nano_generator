@@ -19,7 +19,7 @@ git clone https://github.com/kaifengZheng/GA_nano_generator.git
 Step 1: Modify parameters in config.toml
 Step 2: run NanoGene
 ``` bash
-cd essential linux
+cd essential_linux
 bash NanoGene.py
 ```
 
