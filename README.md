@@ -15,6 +15,14 @@ Decoding the structural and morphological information is crucial after measuring
 ```bash
 git clone https://github.com/kaifengZheng/GA_nano_generator.git
 ```
+## Usage
+Step 1: Modify parameters in config.toml
+Step 2: run NanoGene
+``` bash
+cd essential linux
+bash NanoGene.py
+```
+
 
 
   
