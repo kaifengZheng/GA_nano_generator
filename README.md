@@ -33,6 +33,11 @@ cd essential_linux
 python NanoGene.py
 ```
 
+Citation
+--------------------------
+please cite: <br>
+Kaifeng Zheng, Charlotte Vogt, Anatoly I. Frenkel; Morphological descriptors of nanoparticles: The link between atomistic structures and x-ray absorption spectra. J. Chem. Phys. 28 January 2026; 164 (4): 044201. https://doi.org/10.1063/5.0301368
+
 
 
 
