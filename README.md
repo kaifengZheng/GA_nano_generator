@@ -1,27 +1,22 @@
 # Genetic algorithm for reconstruction of nanoparticles from known descriptors
-## The purpose of this project
-Decoding the structural and morphological information is crucial after measuring samples containing nanoparticles. This information opens the door to discovering the nano-world. However, experimental tools like spectroscopies typically provide limited information across several variables or descriptors. Constructing a comprehensive view of the sample or representative nanoparticles requires transforming this 1-D information into 3-D, which is an intriguing yet challenging task. This tool offers a method for reconstructing nanoparticles using various known descriptors. The advantage of using a genetic algorithm is that it produces a bunch of nanoparticles rather than a single solution, allowing users to evaluate other computable properties of the generated nanoparticles.
-## Methodology
-1. Genetic algorithm-a quick introduction
-2. Algorithm
-   1. particle construction
-   2. fitness function
-   3. parent selection
-   4. mutation
-   5. crossover
-   6. clowding and niche
-3. Configuration
-## installation
+The purpose of the code
+------------------------
+* Reconstruct a bunch of possible nanoparticle structures from given structural or geometrical descriptors taking advantage of genetic algorithm. 🔥
+* Those reconstructed structures can be employed to further validate experimental observation, to build a structure database for machine learning studies or other purposes.  ⚡
+Methodology
+------------------------
+The basic method is illustrated below, which follows a standard genetic algorithm framework.
+<img width="701" height="758" alt="image" src="https://github.com/user-attachments/assets/16315b0c-3fb9-4576-867c-76af5fd58d13" />
+<br>The available descriptors are listed below:
+<img width="763" height="446" alt="image" src="https://github.com/user-attachments/assets/73039607-5d18-4def-a3c5-4b34cf555511" />
+Installation
+-------------------------
 ```bash
 git clone https://github.com/kaifengZheng/GA_nano_generator.git
 ```
-## Usage
-* Step 1: Modify parameters in config.toml
-* Step 2: run NanoGene
-``` bash
-cd essential_linux
-bash NanoGene.py
-```
+Usage
+-------------------------
+
 
 
 
