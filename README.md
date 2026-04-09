@@ -5,6 +5,7 @@ The purpose of the code
 ------------------------
 * Reconstruct a bunch of possible nanoparticle structures from given structural or geometrical descriptors taking advantage of genetic algorithm. 🔥
 * Those reconstructed structures can be employed to further validate experimental observation, to build a structure database for machine learning studies or other purposes.  ⚡
+* This prototype method only works for FCC particles for this moment, other lattice types can be 
 
 Methodology
 ------------------------
@@ -13,6 +14,11 @@ The basic method is illustrated below, which follows a standard genetic algorith
   
 <br>The available descriptors are listed below:
 <p align="center"><img width="763" height="446" alt="image" src="https://github.com/user-attachments/assets/73039607-5d18-4def-a3c5-4b34cf555511" />
+
+Particle disstribution
+------------------------
+The selected descriptors can be recompiled from reconstructed structures. As the following figure demonstrated, those particles will have board distributions for many descriptors and converged to a narrow distribution for the given value.<br>
+<p align="center"><img width="990" height="467" alt="image" src="https://github.com/user-attachments/assets/3b7dd58f-eb0e-4aea-9ff4-a878f492fa2a" />
 
 Installation
 -------------------------
